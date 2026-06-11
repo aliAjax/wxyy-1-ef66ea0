@@ -3,29 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>古籍纸张虫蛀标记</title>
+  <title>古籍纸张虫蛀标记 · 多页卷册版</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <main class="app">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Archive Page Damage</p>
+        <p class="eyebrow">Archive Volume Damage</p>
         <h1>古籍纸张虫蛀标记</h1>
+      </div>
+      <div class="volume-meta">
+        <label class="meta-field">
+          <span>卷册编号</span>
+          <input id="volumeId" type="text" placeholder="如：Vol-001" />
+        </label>
+        <label class="meta-field">
+          <span>卷册名称</span>
+          <input id="volumeTitle" type="text" placeholder="如：永乐大典·卷三千七" />
+        </label>
       </div>
       <div class="actions">
         <button id="exportBtn" type="button" title="导出JSON">导出</button>
-        <button id="clearBtn" type="button" title="清空当前记录">清空</button>
+        <button id="clearBtn" type="button" title="清空当前页记录">清空本页</button>
+        <button id="clearAllBtn" type="button" title="清空全部卷册数据" class="danger">全部清空</button>
       </div>
     </header>
 
     <section class="workspace">
-      <aside class="panel">
-        <label class="upload">
-          <span>上传扫描页</span>
-          <input id="imageInput" type="file" accept="image/*" />
+      <aside class="panel pages-panel">
+        <h2>卷册页面</h2>
+        <label class="upload upload-multi">
+          <span>批量导入扫描页</span>
+          <input id="imageInput" type="file" accept="image/*" multiple />
         </label>
+        <div class="pages-empty" id="pagesEmpty">
+          还未导入任何页面。
+        </div>
+        <div id="pagesList" class="pages-list"></div>
+      </aside>
 
+      <aside class="panel tools-panel">
         <label>
           损伤类型
           <select id="typeInput">
@@ -42,22 +60,32 @@
         </label>
 
         <div class="stats" id="stats"></div>
+        <div class="stats-total" id="statsTotal"></div>
       </aside>
 
       <section class="canvas-panel">
         <div class="image-stage" id="stage">
-          <div class="empty" id="emptyState">上传古籍扫描页后，在页面上点击即可标记损伤</div>
+          <div class="empty" id="emptyState">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
           <img id="pageImage" alt="古籍扫描页" />
           <div id="markers" class="markers"></div>
+        </div>
+        <div class="page-nav" id="pageNav" style="display:none;">
+          <button id="prevPage" type="button" title="上一页">← 上一页</button>
+          <span class="page-indicator" id="pageIndicator"></span>
+          <button id="nextPage" type="button" title="下一页">下一页 →</button>
         </div>
       </section>
 
       <aside class="panel list-panel">
-        <h2>损伤记录</h2>
+        <h2>本页损伤记录</h2>
         <div id="markerList" class="marker-list"></div>
       </aside>
     </section>
   </main>
+
+  <script src="./js/storage.js"></script>
+  <script src="./js/state.js"></script>
+  <script src="./js/render.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
