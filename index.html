@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>古籍纸张虫蛀标记</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Archive Page Damage</p>
+        <h1>古籍纸张虫蛀标记</h1>
+      </div>
+      <div class="actions">
+        <button id="exportBtn" type="button" title="导出JSON">导出</button>
+        <button id="clearBtn" type="button" title="清空当前记录">清空</button>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <aside class="panel">
+        <label class="upload">
+          <span>上传扫描页</span>
+          <input id="imageInput" type="file" accept="image/*" />
+        </label>
+
+        <label>
+          损伤类型
+          <select id="typeInput">
+            <option value="虫蛀点">虫蛀点</option>
+            <option value="破洞">破洞</option>
+            <option value="霉斑">霉斑</option>
+            <option value="缺角">缺角</option>
+          </select>
+        </label>
+
+        <label>
+          备注
+          <textarea id="noteInput" rows="4" placeholder="例如：沿书口散点分布，疑似旧蛀"></textarea>
+        </label>
+
+        <div class="stats" id="stats"></div>
+      </aside>
+
+      <section class="canvas-panel">
+        <div class="image-stage" id="stage">
+          <div class="empty" id="emptyState">上传古籍扫描页后，在页面上点击即可标记损伤</div>
+          <img id="pageImage" alt="古籍扫描页" />
+          <div id="markers" class="markers"></div>
+        </div>
+      </section>
+
+      <aside class="panel list-panel">
+        <h2>损伤记录</h2>
+        <div id="markerList" class="marker-list"></div>
+      </aside>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
