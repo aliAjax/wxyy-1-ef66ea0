@@ -369,6 +369,15 @@
     Doms.deleteTypeModal.style.display = "none";
   }
 
+  function isEditingTypeName() {
+    return Boolean(
+      Doms.typeConfigList &&
+        Doms.typeConfigList.contains(document.activeElement) &&
+        document.activeElement &&
+        document.activeElement.dataset.nameFor
+    );
+  }
+
   function renderAll() {
     renderTypeInput();
     renderVolumeMeta();
@@ -377,7 +386,11 @@
     renderStats();
     renderMarkerList();
     renderPageNav();
-    if (Doms.typeConfigModal && Doms.typeConfigModal.style.display !== "none") {
+    if (
+      Doms.typeConfigModal &&
+      Doms.typeConfigModal.style.display !== "none" &&
+      !isEditingTypeName()
+    ) {
       renderTypeConfigList();
     }
   }
