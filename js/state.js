@@ -1,5 +1,5 @@
 (function (global) {
-  const { TYPES } = global.VolumeStorage;
+  const { TYPES, MODES } = global.VolumeStorage;
 
   const listeners = new Set();
 
@@ -144,12 +144,36 @@
       if (!TYPES.includes(type)) return null;
       const marker = {
         id: crypto.randomUUID(),
+        mode: "point",
         type,
         note: (note || "").trim(),
         x: Number(Number(x).toFixed(2)),
         y: Number(Number(y).toFixed(2)),
         createdAt: new Date().toISOString(),
       };
+      page.markers.push(marker);
+      page.updatedAt = marker.createdAt;
+      this._persist();
+      this._notify();
+      return marker;
+    },
+
+    addRegion({ type, note, x, y, width, height }) {
+      const page = this.currentPage;
+      if (!page) return null;
+      if (!TYPES.includes(type)) return null;
+      const marker = {
+        id: crypto.randomUUID(),
+        mode: "region",
+        type,
+        note: (note || "").trim(),
+        x: Number(Number(x).toFixed(2)),
+        y: Number(Number(y).toFixed(2)),
+        width: Number(Number(width).toFixed(2)),
+        height: Number(Number(height).toFixed(2)),
+        createdAt: new Date().toISOString(),
+      };
+      if (marker.width < 1 || marker.height < 1) return null;
       page.markers.push(marker);
       page.updatedAt = marker.createdAt;
       this._persist();

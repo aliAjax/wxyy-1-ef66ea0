@@ -1,6 +1,7 @@
 (function (global) {
   const STORAGE_KEY = "wxyy-1-archive-volume";
   const TYPES = ["虫蛀点", "破洞", "霉斑", "缺角"];
+  const MODES = ["point", "region"];
 
   const DEFAULT_STATE = {
     volumeId: "",
@@ -55,6 +56,25 @@
     return state;
   }
 
+  function normalizeMarker(m) {
+    if (!m || typeof m.id !== "string") return null;
+    const mode = m.mode === "region" ? "region" : "point";
+    const base = {
+      id: m.id,
+      type: TYPES.includes(m.type) ? m.type : TYPES[0],
+      mode,
+      note: (m.note || "").trim(),
+      x: Number(Number(m.x).toFixed(2)),
+      y: Number(Number(m.y).toFixed(2)),
+      createdAt: m.createdAt || new Date().toISOString(),
+    };
+    if (mode === "region") {
+      base.width = Number(Number(m.width || 0).toFixed(2));
+      base.height = Number(Number(m.height || 0).toFixed(2));
+    }
+    return base;
+  }
+
   function normalizePage(raw) {
     if (!raw || typeof raw !== "object" || !raw.id) return null;
     return {
@@ -63,7 +83,7 @@
       fileName: raw.fileName || "",
       image: raw.image || "",
       markers: Array.isArray(raw.markers)
-        ? raw.markers.filter((m) => m && typeof m.id === "string")
+        ? raw.markers.map(normalizeMarker).filter(Boolean)
         : [],
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString(),
@@ -85,6 +105,7 @@
   const VolumeStorage = {
     KEY: STORAGE_KEY,
     TYPES,
+    MODES,
 
     load() {
       return normalizeState(readRaw());
@@ -113,7 +134,7 @@
         name: p.name,
         fileName: p.fileName,
         imageIncluded: Boolean(p.image),
-        markers: p.markers,
+        markers: p.markers.map(normalizeMarker).filter(Boolean),
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
       }));
@@ -132,7 +153,7 @@
 
       return {
         format: "archive-volume-damage",
-        formatVersion: "1.0",
+        formatVersion: "1.1",
         exportedAt: new Date().toISOString(),
         volume: {
           id: state.volumeId,

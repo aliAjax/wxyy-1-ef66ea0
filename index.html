@@ -45,6 +45,14 @@
 
       <aside class="panel tools-panel">
         <label>
+          标注模式
+          <div class="mode-switch" id="modeSwitch">
+            <button type="button" class="mode-btn active" data-mode="point">点标记</button>
+            <button type="button" class="mode-btn" data-mode="region">区域标注</button>
+          </div>
+        </label>
+
+        <label>
           损伤类型
           <select id="typeInput">
             <option value="虫蛀点">虫蛀点</option>
@@ -68,6 +76,7 @@
           <div class="empty" id="emptyState">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
           <img id="pageImage" alt="古籍扫描页" />
           <div id="markers" class="markers"></div>
+          <div id="dragOverlay" class="drag-overlay"></div>
         </div>
         <div class="page-nav" id="pageNav" style="display:none;">
           <button id="prevPage" type="button" title="上一页">← 上一页</button>

@@ -436,6 +436,7 @@ textarea {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 10;
 }
 
 .marker {
@@ -454,6 +455,132 @@ textarea {
 .marker[data-type="破洞"] { background: var(--hole); }
 .marker[data-type="霉斑"] { background: var(--mold); }
 .marker[data-type="缺角"] { background: var(--corner); }
+
+.mode-switch {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fffdf8;
+}
+
+.mode-btn {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 0;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  min-height: 36px;
+}
+
+.mode-btn + .mode-btn {
+  border-left: 1px solid var(--line);
+}
+
+.mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mode-btn:hover:not(.active) {
+  background: #f2e6cf;
+}
+
+.region-marker {
+  position: absolute;
+  border: 2px solid;
+  border-radius: 3px;
+  pointer-events: auto;
+  cursor: help;
+  box-shadow: 0 1px 8px rgb(0 0 0 / 20%);
+}
+
+.region-marker[data-type="虫蛀点"] { border-color: var(--accent); background: rgba(157, 63, 47, 0.15); }
+.region-marker[data-type="破洞"] { border-color: var(--hole); background: rgba(47, 43, 39, 0.15); }
+.region-marker[data-type="霉斑"] { border-color: var(--mold); background: rgba(100, 125, 82, 0.15); }
+.region-marker[data-type="缺角"] { border-color: var(--corner); background: rgba(178, 120, 48, 0.15); }
+
+.region-marker .region-label {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 0 0 3px 0;
+  color: #fff;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.region-marker[data-type="虫蛀点"] .region-label { background: var(--accent); }
+.region-marker[data-type="破洞"] .region-label { background: var(--hole); }
+.region-marker[data-type="霉斑"] .region-label { background: var(--mold); }
+.region-marker[data-type="缺角"] .region-label { background: var(--corner); }
+
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  touch-action: none;
+}
+
+.drag-overlay.active {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+body.dragging-region {
+  user-select: none;
+  cursor: crosshair;
+}
+
+body.dragging-region * {
+  cursor: crosshair !important;
+}
+
+.drag-rect {
+  position: absolute;
+  border: 2px dashed var(--accent);
+  background: rgba(157, 63, 47, 0.12);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.record .record-mode {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.record .record-mode.mode-point {
+  background: rgba(119, 107, 95, 0.12);
+  color: var(--muted);
+}
+
+.record .record-mode.mode-region {
+  background: rgba(157, 63, 47, 0.12);
+  color: var(--accent);
+}
+
+.record .region-dims {
+  display: block;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
+  margin-top: 2px;
+}
 
 .page-nav {
   display: flex;
@@ -573,5 +700,23 @@ textarea {
   .page-remove {
     opacity: 1;
     justify-self: center;
+  }
+
+  .drag-overlay {
+    z-index: 2;
+  }
+
+  .markers {
+    z-index: 3;
+  }
+
+  .canvas-panel {
+    position: relative;
+    z-index: 1;
+  }
+
+  .list-panel {
+    position: relative;
+    z-index: 10;
   }
 }

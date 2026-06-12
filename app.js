@@ -10,6 +10,26 @@
   const exportBtn = document.getElementById("exportBtn");
   const clearBtn = document.getElementById("clearBtn");
   const clearAllBtn = document.getElementById("clearAllBtn");
+  const modeSwitch = document.getElementById("modeSwitch");
+  const dragOverlay = document.getElementById("dragOverlay");
+
+  let currentMode = "point";
+  let dragState = null;
+
+  function setMode(mode) {
+    if (mode !== "point" && mode !== "region") return;
+    currentMode = mode;
+    const btns = modeSwitch.querySelectorAll(".mode-btn");
+    btns.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.mode === mode);
+    });
+    if (mode === "region") {
+      dragOverlay.classList.add("active");
+    } else {
+      dragOverlay.classList.remove("active");
+      cancelDrag();
+    }
+  }
 
   function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
@@ -69,6 +89,7 @@
   }
 
   function handleStageClick(event) {
+    if (currentMode !== "point") return;
     if (event.target.closest("button, [data-marker]")) return;
     const page = State.currentPage;
     if (!page || !page.image) return;
@@ -83,6 +104,67 @@
     if (marker) {
       noteInput.value = "";
     }
+  }
+
+  function startDrag(clientX, clientY) {
+    if (currentMode !== "region") return;
+    const page = State.currentPage;
+    if (!page || !page.image) return;
+    const rect = dragOverlay.getBoundingClientRect();
+    const startX = ((clientX - rect.left) / rect.width) * 100;
+    const startY = ((clientY - rect.top) / rect.height) * 100;
+    const el = document.createElement("div");
+    el.className = "drag-rect";
+    dragOverlay.appendChild(el);
+    dragState = { el, startX, startY, clientStartX: clientX, clientStartY: clientY };
+    document.body.classList.add("dragging-region");
+  }
+
+  function moveDrag(clientX, clientY) {
+    if (!dragState) return;
+    const rect = dragOverlay.getBoundingClientRect();
+    const curX = ((clientX - rect.left) / rect.width) * 100;
+    const curY = ((clientY - rect.top) / rect.height) * 100;
+    const left = Math.max(0, Math.min(dragState.startX, curX));
+    const top = Math.max(0, Math.min(dragState.startY, curY));
+    const right = Math.min(100, Math.max(dragState.startX, curX));
+    const bottom = Math.min(100, Math.max(dragState.startY, curY));
+    dragState.el.style.left = left + "%";
+    dragState.el.style.top = top + "%";
+    dragState.el.style.width = (right - left) + "%";
+    dragState.el.style.height = (bottom - top) + "%";
+    dragState.resultX = left;
+    dragState.resultY = top;
+    dragState.resultW = right - left;
+    dragState.resultH = bottom - top;
+  }
+
+  function endDrag() {
+    if (!dragState) return;
+    const { resultX, resultY, resultW, resultH, el } = dragState;
+    el.remove();
+    dragState = null;
+    document.body.classList.remove("dragging-region");
+    if (resultW >= 1 && resultH >= 1) {
+      const marker = State.addRegion({
+        type: typeInput.value,
+        note: noteInput.value,
+        x: Number(resultX.toFixed(2)),
+        y: Number(resultY.toFixed(2)),
+        width: Number(resultW.toFixed(2)),
+        height: Number(resultH.toFixed(2)),
+      });
+      if (marker) {
+        noteInput.value = "";
+      }
+    }
+  }
+
+  function cancelDrag() {
+    if (!dragState) return;
+    dragState.el.remove();
+    dragState = null;
+    document.body.classList.remove("dragging-region");
   }
 
   function sanitizeFilenamePart(str) {
@@ -144,6 +226,13 @@
   }
 
   function handleKeyboard(event) {
+    if (event.key === "Escape") {
+      if (dragState) {
+        event.preventDefault();
+        cancelDrag();
+        return;
+      }
+    }
     if (event.target.matches("input, textarea, select")) return;
     if (event.key === "ArrowLeft" && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
@@ -166,13 +255,61 @@
 
     stage.addEventListener("click", handleStageClick);
 
+    modeSwitch.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-mode]");
+      if (!btn) return;
+      setMode(btn.dataset.mode);
+    });
+
+    dragOverlay.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      startDrag(event.clientX, event.clientY);
+    });
+
+    document.addEventListener("mousemove", (event) => {
+      if (dragState) {
+        event.preventDefault();
+        moveDrag(event.clientX, event.clientY);
+      }
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (dragState) endDrag();
+    });
+
+    dragOverlay.addEventListener("touchstart", (event) => {
+      if (event.touches.length !== 1) return;
+      event.preventDefault();
+      const touch = event.touches[0];
+      startDrag(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    document.addEventListener("touchmove", (event) => {
+      if (!dragState) return;
+      event.preventDefault();
+      const touch = event.touches[0];
+      moveDrag(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    document.addEventListener("touchend", () => {
+      if (dragState) endDrag();
+    });
+
+    document.addEventListener("touchcancel", () => {
+      cancelDrag();
+    });
+
     exportBtn.addEventListener("click", handleExport);
     clearBtn.addEventListener("click", handleClearCurrent);
     clearAllBtn.addEventListener("click", handleClearAll);
 
     document.addEventListener("keydown", handleKeyboard);
 
-    State.subscribe(() => Render.refresh());
+    State.subscribe(() => {
+      cancelDrag();
+      Render.refresh();
+    });
 
     const dropZone = document.body;
     ;['dragenter', 'dragover'].forEach(evt => {

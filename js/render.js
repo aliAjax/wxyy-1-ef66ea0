@@ -17,6 +17,8 @@
     pageIndicator: null,
     prevPage: null,
     nextPage: null,
+    modeSwitch: null,
+    dragOverlay: null,
   };
 
   function initDoms() {
@@ -34,6 +36,8 @@
     Doms.pageIndicator = document.getElementById("pageIndicator");
     Doms.prevPage = document.getElementById("prevPage");
     Doms.nextPage = document.getElementById("nextPage");
+    Doms.modeSwitch = document.getElementById("modeSwitch");
+    Doms.dragOverlay = document.getElementById("dragOverlay");
   }
 
   function escapeHtml(str) {
@@ -108,7 +112,18 @@
 
     Doms.markersLayer.innerHTML = page.markers
       .map((m) => {
-        const title = `${m.type}${m.note ? "：" + m.note : ""}`;
+        const title = `${m.mode === "region" ? "[区域] " : ""}${m.type}${m.note ? "：" + m.note : ""}`;
+        if (m.mode === "region") {
+          return `
+            <span class="region-marker"
+                  data-type="${escapeHtml(m.type)}"
+                  data-marker="${m.id}"
+                  title="${escapeHtml(title)}"
+                  style="left:${m.x}%;top:${m.y}%;width:${m.width}%;height:${m.height}%">
+              <span class="region-label">${escapeHtml(m.type)}</span>
+            </span>
+          `;
+        }
         return `
           <span class="marker"
                 data-type="${escapeHtml(m.type)}"
@@ -173,10 +188,17 @@
           hour: "2-digit",
           minute: "2-digit",
         });
+        const isRegion = marker.mode === "region";
+        const modeTag = isRegion
+          ? '<span class="record-mode mode-region">区域</span>'
+          : '<span class="record-mode mode-point">点</span>';
+        const dims = isRegion
+          ? `<span class="region-dims">${marker.width}% × ${marker.height}%</span>`
+          : "";
         return `
           <article class="record">
-            <strong>${index + 1}. ${escapeHtml(marker.type)}</strong>
-            <p>${note}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
+            <strong>${index + 1}. ${escapeHtml(marker.type)}${modeTag}</strong>
+            <p>${note}${dims}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
             <button type="button" data-delete="${marker.id}">删除</button>
           </article>
         `;
