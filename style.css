@@ -535,6 +535,7 @@ textarea {
 .drag-overlay.active {
   pointer-events: auto;
   cursor: crosshair;
+  z-index: 20;
 }
 
 body.dragging-region {
