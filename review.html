@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>复核工作台 · 古籍损伤标记质检</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="app review-app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Review Workbench</p>
+        <h1>复核工作台</h1>
+      </div>
+      <div class="volume-meta review-meta">
+        <div class="meta-display">
+          <span>卷册编号</span>
+          <strong id="reviewVolumeId">—</strong>
+        </div>
+        <div class="meta-display">
+          <span>卷册名称</span>
+          <strong id="reviewVolumeTitle">—</strong>
+        </div>
+        <div class="meta-display">
+          <span>标记总数</span>
+          <strong id="reviewTotalCount">0</strong>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="backBtn" type="button" title="返回标记页面">← 返回</button>
+        <button id="importBtn" type="button" title="导入JSON数据" class="primary">导入JSON</button>
+        <input id="importInput" type="file" accept="application/json,.json" style="display:none;" />
+        <button id="exportBtn" type="button" title="导出带复核结果的JSON" disabled>导出复核结果</button>
+        <button id="resetBtn" type="button" title="重置所有复核状态" class="danger" disabled>重置复核</button>
+      </div>
+    </header>
+
+    <section class="review-stats" id="reviewStats" style="display:none;">
+      <div class="stat-card">
+        <span class="stat-label">待复核</span>
+        <span class="stat-value" id="statPending">0</span>
+      </div>
+      <div class="stat-card passed">
+        <span class="stat-label">已通过</span>
+        <span class="stat-value" id="statPassed">0</span>
+      </div>
+      <div class="stat-card doubtful">
+        <span class="stat-label">存疑</span>
+        <span class="stat-value" id="statDoubtful">0</span>
+      </div>
+      <div class="stat-card rejected">
+        <span class="stat-label">已退回</span>
+        <span class="stat-value" id="statRejected">0</span>
+      </div>
+      <div class="stat-card progress">
+        <span class="stat-label">复核进度</span>
+        <span class="stat-value" id="statProgress">0%</span>
+      </div>
+    </section>
+
+    <section class="review-workspace">
+      <aside class="panel review-pages-panel">
+        <h2>页面列表</h2>
+        <div class="filter-bar">
+          <select id="statusFilter">
+            <option value="all">全部状态</option>
+            <option value="pending">待复核</option>
+            <option value="passed">已通过</option>
+            <option value="doubtful">存疑</option>
+            <option value="rejected">已退回</option>
+          </select>
+          <select id="pageFilter">
+            <option value="all">全部页面</option>
+          </select>
+        </div>
+        <div id="reviewPagesEmpty" class="pages-empty">
+          请先导入JSON数据文件。
+        </div>
+        <div id="reviewPagesList" class="review-pages-list"></div>
+      </aside>
+
+      <section class="panel review-detail-panel">
+        <div class="review-detail-header">
+          <h2 id="reviewDetailTitle">标记详情</h2>
+          <div class="review-nav">
+            <button id="prevRecord" type="button" disabled>← 上一条</button>
+            <span id="recordIndicator">0 / 0</span>
+            <button id="nextRecord" type="button" disabled>下一条 →</button>
+          </div>
+        </div>
+
+        <div id="reviewEmptyState" class="review-empty">
+          <div class="review-empty-icon">📋</div>
+          <p>导入标记数据后，点击左侧列表中的记录开始复核</p>
+        </div>
+
+        <div id="reviewDetailContent" class="review-detail-content" style="display:none;">
+          <div class="review-marker-info">
+            <div class="info-row">
+              <span class="info-label">序号</span>
+              <span class="info-value" id="detailIndex"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">所在页面</span>
+              <span class="info-value" id="detailPage"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">标记类型</span>
+              <span class="info-value" id="detailType"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">标记模式</span>
+              <span class="info-value" id="detailMode"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">坐标</span>
+              <span class="info-value" id="detailCoords"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">尺寸</span>
+              <span class="info-value" id="detailSize"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">创建时间</span>
+              <span class="info-value" id="detailTime"></span>
+            </div>
+            <div class="info-row note-row">
+              <span class="info-label">原始备注</span>
+              <span class="info-value" id="detailNote"></span>
+            </div>
+          </div>
+
+          <div class="review-actions-section">
+            <h3>复核操作</h3>
+            <div class="review-status-buttons">
+              <button type="button" class="review-btn passed-btn" data-status="passed">
+                <span class="btn-icon">✓</span>
+                <span>通过</span>
+              </button>
+              <button type="button" class="review-btn doubtful-btn" data-status="doubtful">
+                <span class="btn-icon">?</span>
+                <span>存疑</span>
+              </button>
+              <button type="button" class="review-btn rejected-btn" data-status="rejected">
+                <span class="btn-icon">✕</span>
+                <span>退回</span>
+              </button>
+            </div>
+
+            <div class="review-comment-section">
+              <label for="reviewComment">
+                复核意见
+                <textarea id="reviewComment" rows="4" placeholder="请输入复核意见（如存疑或退回，请说明原因）"></textarea>
+              </label>
+            </div>
+
+            <div class="review-current-status">
+              <span>当前复核状态：</span>
+              <span id="currentReviewStatus" class="status-badge pending">待复核</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="./js/storage.js"></script>
+  <script src="./js/review-state.js"></script>
+  <script src="./js/review-render.js"></script>
+  <script src="./review-app.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@
   const typeInput = document.getElementById("typeInput");
   const noteInput = document.getElementById("noteInput");
   const stage = document.getElementById("stage");
+  const reviewBtn = document.getElementById("reviewBtn");
   const exportBtn = document.getElementById("exportBtn");
   const clearBtn = document.getElementById("clearBtn");
   const clearAllBtn = document.getElementById("clearAllBtn");
@@ -211,6 +212,10 @@
     State.clearCurrentPage();
   }
 
+  function handleGoReview() {
+    window.location.href = "./review.html";
+  }
+
   function handleClearAll() {
     if (!State.hasPages) {
       alert("当前没有卷册数据。");
@@ -300,6 +305,7 @@
       cancelDrag();
     });
 
+    reviewBtn.addEventListener("click", handleGoReview);
     exportBtn.addEventListener("click", handleExport);
     clearBtn.addEventListener("click", handleClearCurrent);
     clearAllBtn.addEventListener("click", handleClearAll);
