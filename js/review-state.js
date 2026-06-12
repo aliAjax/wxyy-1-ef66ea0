@@ -307,7 +307,8 @@
         id: p.id,
         name: p.name,
         fileName: p.fileName,
-        imageIncluded: Boolean(p.image),
+        imageIncluded:
+          typeof p.imageIncluded === "boolean" ? p.imageIncluded : Boolean(p.image),
         markers: p.markers.map((m) => ({
           id: m.id,
           type: m.type,
