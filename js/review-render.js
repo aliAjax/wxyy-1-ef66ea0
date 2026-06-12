@@ -184,7 +184,7 @@
               <span class="status-badge ${statusClass}">${statusLabel}</span>
             </div>
             <div class="record-body">
-              <strong>${escapeHtml(record.type)}${modeTag}</strong>
+              <strong><span class="stat-dot" style="background:${escapeHtml(record.typeColor)};"></span>${escapeHtml(record.type)}${modeTag}</strong>
               <p class="record-page">${escapeHtml(record.pageName)}</p>
               <p class="record-coords">${coords}</p>
               <p class="record-note">${note}</p>
@@ -217,7 +217,7 @@
 
     Doms.detailIndex.textContent = `#${flatIdx}（筛选后第 ${currentIdx + 1} 条）`;
     Doms.detailPage.textContent = record.pageName;
-    Doms.detailType.textContent = record.type;
+    Doms.detailType.innerHTML = `<span class="stat-dot" style="background:${escapeHtml(record.typeColor)};"></span>${escapeHtml(record.type)}`;
     Doms.detailMode.textContent = isRegion ? "区域标注" : "点标记";
     Doms.detailCoords.textContent = `X: ${record.x}%, Y: ${record.y}%`;
     Doms.detailSize.textContent = isRegion

@@ -1,7 +1,20 @@
 (function (global) {
   const STORAGE_KEY = "wxyy-1-archive-volume";
-  const TYPES = ["虫蛀点", "破洞", "霉斑", "缺角"];
   const MODES = ["point", "region"];
+
+  const DEFAULT_DAMAGE_TYPES = [
+    { id: "type-bug", name: "虫蛀点", color: "#9d3f2f" },
+    { id: "type-hole", name: "破洞", color: "#2f2b27" },
+    { id: "type-mold", name: "霉斑", color: "#647d52" },
+    { id: "type-corner", name: "缺角", color: "#b27830" },
+  ];
+
+  const DEFAULT_LEGACY_TYPE_MAP = {
+    "虫蛀点": "type-bug",
+    "破洞": "type-hole",
+    "霉斑": "type-mold",
+    "缺角": "type-corner",
+  };
 
   const DEFAULT_STATE = {
     volumeId: "",
@@ -10,6 +23,7 @@
     currentPageId: null,
     createdAt: null,
     updatedAt: null,
+    damageTypes: structuredClone(DEFAULT_DAMAGE_TYPES),
   };
 
   function readRaw() {
@@ -35,33 +49,50 @@
     }
   }
 
-  function normalizeState(raw) {
-    if (!raw || typeof raw !== "object") {
-      return structuredClone(DEFAULT_STATE);
+  function ensureDamageTypes(raw) {
+    if (
+      raw &&
+      Array.isArray(raw.damageTypes) &&
+      raw.damageTypes.length > 0 &&
+      raw.damageTypes.every((t) => t && t.id && t.name && t.color)
+    ) {
+      return raw.damageTypes;
     }
-
-    const state = Object.assign(structuredClone(DEFAULT_STATE), raw);
-    state.pages = Array.isArray(state.pages)
-      ? state.pages.map(normalizePage).filter(Boolean)
-      : [];
-
-    if (!state.currentPageId && state.pages.length > 0) {
-      state.currentPageId = state.pages[0].id;
-    }
-
-    if (state.pages.length > 0 && !state.pages.find((p) => p.id === state.currentPageId)) {
-      state.currentPageId = state.pages[0].id;
-    }
-
-    return state;
+    return structuredClone(DEFAULT_DAMAGE_TYPES);
   }
 
-  function normalizeMarker(m) {
+  function lookupTypeId(legacyTypeName, damageTypes) {
+    if (!legacyTypeName) return damageTypes[0].id;
+    const directMatch = damageTypes.find((t) => t.name === legacyTypeName);
+    if (directMatch) return directMatch.id;
+    const legacyId = DEFAULT_LEGACY_TYPE_MAP[legacyTypeName];
+    if (legacyId) {
+      const byLegacyId = damageTypes.find((t) => t.id === legacyId);
+      if (byLegacyId) return byLegacyId.id;
+    }
+    return null;
+  }
+
+  function normalizeMarker(m, damageTypes) {
     if (!m || typeof m.id !== "string") return null;
     const mode = m.mode === "region" ? "region" : "point";
+    let resolvedTypeId;
+    if (m.typeId && damageTypes.some((t) => t.id === m.typeId)) {
+      resolvedTypeId = m.typeId;
+    } else {
+      const lookup = lookupTypeId(m.type, damageTypes);
+      if (lookup) {
+        resolvedTypeId = lookup;
+      } else {
+        resolvedTypeId = damageTypes[0].id;
+      }
+    }
+    const resolvedType =
+      damageTypes.find((t) => t.id === resolvedTypeId) || damageTypes[0];
     const base = {
       id: m.id,
-      type: TYPES.includes(m.type) ? m.type : TYPES[0],
+      typeId: resolvedTypeId,
+      type: resolvedType.name,
       mode,
       note: (m.note || "").trim(),
       x: Number(Number(m.x).toFixed(2)),
@@ -75,7 +106,7 @@
     return base;
   }
 
-  function normalizePage(raw) {
+  function normalizePage(raw, damageTypes) {
     if (!raw || typeof raw !== "object" || !raw.id) return null;
     return {
       id: raw.id,
@@ -83,29 +114,81 @@
       fileName: raw.fileName || "",
       image: raw.image || "",
       markers: Array.isArray(raw.markers)
-        ? raw.markers.map(normalizeMarker).filter(Boolean)
+        ? raw.markers.map((m) => normalizeMarker(m, damageTypes)).filter(Boolean)
         : [],
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString(),
     };
   }
 
+  function normalizeState(raw) {
+    if (!raw || typeof raw !== "object") {
+      return structuredClone(DEFAULT_STATE);
+    }
+
+    const damageTypes = ensureDamageTypes(raw);
+    const state = Object.assign(structuredClone(DEFAULT_STATE), raw);
+    state.damageTypes = damageTypes;
+    state.pages = Array.isArray(state.pages)
+      ? state.pages.map((p) => normalizePage(p, damageTypes)).filter(Boolean)
+      : [];
+
+    if (!state.currentPageId && state.pages.length > 0) {
+      state.currentPageId = state.pages[0].id;
+    }
+
+    if (
+      state.pages.length > 0 &&
+      !state.pages.find((p) => p.id === state.currentPageId)
+    ) {
+      state.currentPageId = state.pages[0].id;
+    }
+
+    return state;
+  }
+
   function createPageFromImage({ dataUrl, fileName }) {
-    return normalizePage({
-      id: crypto.randomUUID(),
-      name: fileName ? fileName.replace(/\.[^.]+$/, "") : "",
-      fileName: fileName || "",
-      image: dataUrl,
-      markers: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    return normalizePage(
+      {
+        id: crypto.randomUUID(),
+        name: fileName ? fileName.replace(/\.[^.]+$/, "") : "",
+        fileName: fileName || "",
+        image: dataUrl,
+        markers: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      structuredClone(DEFAULT_DAMAGE_TYPES)
+    );
+  }
+
+  function hexWithAlpha(hex, alpha) {
+    const h = hex.replace("#", "");
+    const full =
+      h.length === 3
+        ? h
+            .split("")
+            .map((c) => c + c)
+            .join("")
+        : h;
+    const r = parseInt(full.substring(0, 2), 16);
+    const g = parseInt(full.substring(2, 4), 16);
+    const b = parseInt(full.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
   const VolumeStorage = {
     KEY: STORAGE_KEY,
-    TYPES,
+    DEFAULT_DAMAGE_TYPES,
     MODES,
+
+    get TYPES() {
+      const raw = readRaw();
+      const dts = ensureDamageTypes(raw);
+      return dts.map((t) => t.name);
+    },
+
+    hexWithAlpha,
 
     load() {
       return normalizeState(readRaw());
@@ -123,18 +206,24 @@
       const fresh = Object.assign(structuredClone(DEFAULT_STATE), {
         createdAt: now,
         updatedAt: now,
+        damageTypes: structuredClone(DEFAULT_DAMAGE_TYPES),
       });
       writeRaw(fresh);
       return fresh;
     },
 
     export(state) {
+      const damageTypes = state.damageTypes || structuredClone(DEFAULT_DAMAGE_TYPES);
+      const typeMap = Object.fromEntries(damageTypes.map((t) => [t.id, t]));
+
       const pages = state.pages.map((p) => ({
         id: p.id,
         name: p.name,
         fileName: p.fileName,
         imageIncluded: Boolean(p.image),
-        markers: p.markers.map(normalizeMarker).filter(Boolean),
+        markers: p.markers
+          .map((m) => normalizeMarker(m, damageTypes))
+          .filter(Boolean),
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
       }));
@@ -144,17 +233,23 @@
         0
       );
 
-      const typeCounts = Object.fromEntries(TYPES.map((t) => [t, 0]));
+      const typeCounts = Object.fromEntries(
+        damageTypes.map((t) => [t.name, 0])
+      );
       pages.forEach((p) =>
         p.markers.forEach((m) => {
-          if (typeCounts[m.type] !== undefined) typeCounts[m.type] += 1;
+          const t = typeMap[m.typeId];
+          const name = t ? t.name : m.type;
+          if (typeCounts[name] === undefined) typeCounts[name] = 0;
+          typeCounts[name] += 1;
         })
       );
 
       return {
         format: "archive-volume-damage",
-        formatVersion: "1.1",
+        formatVersion: "2.0",
         exportedAt: new Date().toISOString(),
+        damageTypes,
         volume: {
           id: state.volumeId,
           title: state.volumeTitle,

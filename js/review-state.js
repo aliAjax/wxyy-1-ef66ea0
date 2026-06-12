@@ -7,6 +7,100 @@
     rejected: "已退回",
   };
 
+  const DEFAULT_DAMAGE_TYPES_FALLBACK = [
+    { id: "type-bug", name: "虫蛀点", color: "#9d3f2f" },
+    { id: "type-hole", name: "破洞", color: "#2f2b27" },
+    { id: "type-mold", name: "霉斑", color: "#647d52" },
+    { id: "type-corner", name: "缺角", color: "#b27830" },
+  ];
+
+  const LEGACY_TYPE_MAP = {
+    "虫蛀点": "type-bug",
+    "破洞": "type-hole",
+    "霉斑": "type-mold",
+    "缺角": "type-corner",
+  };
+
+  function resolveImportDamageTypes(rawData) {
+    if (
+      rawData &&
+      Array.isArray(rawData.damageTypes) &&
+      rawData.damageTypes.length > 0 &&
+      rawData.damageTypes.every((t) => t && t.id && t.name && t.color)
+    ) {
+      return rawData.damageTypes;
+    }
+    const collected = new Map();
+    if (rawData && Array.isArray(rawData.pages)) {
+      rawData.pages.forEach((p) => {
+        if (p && Array.isArray(p.markers)) {
+          p.markers.forEach((m) => {
+            if (m && m.typeId && m.type) {
+              if (!collected.has(m.typeId)) {
+                collected.set(m.typeId, {
+                  id: m.typeId,
+                  name: m.type,
+                  color: null,
+                });
+              }
+            }
+          });
+        }
+      });
+    }
+    if (collected.size > 0) {
+      const palette = ["#9d3f2f", "#2f2b27", "#647d52", "#b27830", "#5b7fa3", "#8e5a9b", "#3d7a8a", "#c05f3d", "#4e6f3e", "#8a6a3d"];
+      let i = 0;
+      collected.forEach((t) => {
+        const fb = DEFAULT_DAMAGE_TYPES_FALLBACK.find((d) => d.id === t.id);
+        t.color = fb ? fb.color : palette[i++ % palette.length];
+      });
+      return Array.from(collected.values());
+    }
+    return structuredClone(DEFAULT_DAMAGE_TYPES_FALLBACK);
+  }
+
+  function normalizeReviewMarker(m, damageTypes) {
+    if (!m || typeof m.id !== "string") return null;
+    const typeMap = Object.fromEntries(damageTypes.map((t) => [t.id, t]));
+    const nameToId = Object.fromEntries(damageTypes.map((t) => [t.name, t.id]));
+    let typeId = null;
+    if (m.typeId && typeMap[m.typeId]) {
+      typeId = m.typeId;
+    } else if (m.type && nameToId[m.type]) {
+      typeId = nameToId[m.type];
+    } else if (m.type && LEGACY_TYPE_MAP[m.type]) {
+      const lid = LEGACY_TYPE_MAP[m.type];
+      if (typeMap[lid]) typeId = lid;
+    }
+    if (!typeId) typeId = damageTypes[0].id;
+    const t = typeMap[typeId] || damageTypes[0];
+    const mode = m.mode === "region" ? "region" : "point";
+    const base = {
+      id: m.id,
+      typeId,
+      type: t.name,
+      typeColor: t.color,
+      mode,
+      note: (m.note || "").trim(),
+      x: Number(Number(m.x).toFixed(2)),
+      y: Number(Number(m.y).toFixed(2)),
+      createdAt: m.createdAt || new Date().toISOString(),
+      review: {
+        status: m.review && REVIEW_STATUSES.includes(m.review.status)
+          ? m.review.status
+          : "pending",
+        comment: m.review ? (m.review.comment || "").trim() : "",
+        reviewedAt: m.review ? m.review.reviewedAt || null : null,
+      },
+    };
+    if (mode === "region") {
+      base.width = Number(Number(m.width || 0).toFixed(2));
+      base.height = Number(Number(m.height || 0).toFixed(2));
+    }
+    return base;
+  }
+
   const listeners = new Set();
 
   const DEFAULT_STATE = {
@@ -20,19 +114,15 @@
       pageId: "all",
     },
     importedAt: null,
+    damageTypes: structuredClone(DEFAULT_DAMAGE_TYPES_FALLBACK),
   };
 
-  function initializeReviews(pages) {
+  function initializeReviews(pages, damageTypes) {
     return pages.map((page) => ({
       ...page,
-      markers: page.markers.map((marker) => ({
-        ...marker,
-        review: {
-          status: "pending",
-          comment: "",
-          reviewedAt: null,
-        },
-      })),
+      markers: (page.markers || [])
+        .map((marker) => normalizeReviewMarker(marker, damageTypes))
+        .filter(Boolean),
     }));
   }
 
@@ -47,7 +137,9 @@
           pageName: page.name || page.fileName || `第 ${pageIdx + 1} 页`,
           markerIndex: markerIdx,
           marker,
+          typeId: marker.typeId,
           type: marker.type,
+          typeColor: marker.typeColor,
           mode: marker.mode,
           x: marker.x,
           y: marker.y,
@@ -72,7 +164,9 @@
     if (!data.pages || !Array.isArray(data.pages)) {
       return { valid: false, error: "数据中没有页面信息" };
     }
-    const hasMarkers = data.pages.some((p) => p.markers && p.markers.length > 0);
+    const hasMarkers = data.pages.some(
+      (p) => p.markers && p.markers.length > 0
+    );
     if (!hasMarkers) {
       return { valid: false, error: "数据中没有任何损伤标记" };
     }
@@ -101,6 +195,10 @@
       return this._state.pages;
     },
 
+    get damageTypes() {
+      return this._state.damageTypes;
+    },
+
     get allRecords() {
       return this._state.flatRecords;
     },
@@ -116,7 +214,10 @@
 
     get currentRecord() {
       const filtered = this.filteredRecords;
-      if (this._state.currentRecordIndex < 0 || this._state.currentRecordIndex >= filtered.length) {
+      if (
+        this._state.currentRecordIndex < 0 ||
+        this._state.currentRecordIndex >= filtered.length
+      ) {
         return null;
       }
       return filtered[this._state.currentRecordIndex];
@@ -144,7 +245,8 @@
         }
       });
       const reviewed = counts.total - counts.pending;
-      counts.progress = counts.total > 0 ? Math.round((reviewed / counts.total) * 100) : 0;
+      counts.progress =
+        counts.total > 0 ? Math.round((reviewed / counts.total) * 100) : 0;
       return counts;
     },
 
@@ -171,12 +273,17 @@
       }
 
       try {
-        const pages = initializeReviews(rawData.pages);
+        const damageTypes = resolveImportDamageTypes(rawData);
+        const pages = initializeReviews(rawData.pages, damageTypes);
         this._state.sourceData = structuredClone(rawData);
-        this._state.volume = rawData.volume ? structuredClone(rawData.volume) : null;
+        this._state.damageTypes = damageTypes;
+        this._state.volume = rawData.volume
+          ? structuredClone(rawData.volume)
+          : null;
         this._state.pages = pages;
         this._state.flatRecords = buildFlatRecords(pages);
-        this._state.currentRecordIndex = this._state.flatRecords.length > 0 ? 0 : -1;
+        this._state.currentRecordIndex =
+          this._state.flatRecords.length > 0 ? 0 : -1;
         this._state.importedAt = new Date().toISOString();
         this._notify();
         return { success: true };
@@ -194,7 +301,8 @@
       } else {
         return false;
       }
-      this._state.currentRecordIndex = this.filteredRecords.length > 0 ? 0 : -1;
+      this._state.currentRecordIndex =
+        this.filteredRecords.length > 0 ? 0 : -1;
       this._notify();
       return true;
     },
@@ -228,14 +336,17 @@
     prevRecord() {
       const filtered = this.filteredRecords;
       if (filtered.length === 0) return false;
-      const prev = (this._state.currentRecordIndex - 1 + filtered.length) % filtered.length;
+      const prev =
+        (this._state.currentRecordIndex - 1 + filtered.length) %
+        filtered.length;
       this._state.currentRecordIndex = prev;
       this._notify();
       return true;
     },
 
     setReviewStatus(markerId, status, comment) {
-      if (!REVIEW_STATUSES.includes(status) || status === "pending") return false;
+      if (!REVIEW_STATUSES.includes(status) || status === "pending")
+        return false;
 
       const record = this._state.flatRecords.find((r) => r.id === markerId);
       if (!record) return false;
@@ -303,20 +414,26 @@
       if (!this.hasData) return null;
 
       const source = this._state.sourceData;
+      const damageTypes = this._state.damageTypes;
       const pages = this._state.pages.map((p) => ({
         id: p.id,
         name: p.name,
         fileName: p.fileName,
         imageIncluded:
-          typeof p.imageIncluded === "boolean" ? p.imageIncluded : Boolean(p.image),
+          typeof p.imageIncluded === "boolean"
+            ? p.imageIncluded
+            : Boolean(p.image),
         markers: p.markers.map((m) => ({
           id: m.id,
+          typeId: m.typeId,
           type: m.type,
           mode: m.mode,
           note: m.note,
           x: m.x,
           y: m.y,
-          ...(m.mode === "region" ? { width: m.width, height: m.height } : {}),
+          ...(m.mode === "region"
+            ? { width: m.width, height: m.height }
+            : {}),
           createdAt: m.createdAt,
           review: {
             status: m.review.status,
@@ -330,24 +447,25 @@
 
       const reviewStats = this.stats;
 
+      const volume = source.volume ? structuredClone(source.volume) : null;
+      if (volume) {
+        volume.reviewStats = {
+          total: reviewStats.total,
+          passed: reviewStats.passed,
+          doubtful: reviewStats.doubtful,
+          rejected: reviewStats.rejected,
+          pending: reviewStats.pending,
+          progress: reviewStats.progress,
+        };
+      }
+
       return {
         format: "archive-volume-damage",
-        formatVersion: "1.2",
+        formatVersion: "2.1",
         exportedAt: new Date().toISOString(),
         reviewedAt: new Date().toISOString(),
-        volume: source.volume
-          ? {
-              ...source.volume,
-              reviewStats: {
-                total: reviewStats.total,
-                passed: reviewStats.passed,
-                doubtful: reviewStats.doubtful,
-                rejected: reviewStats.rejected,
-                pending: reviewStats.pending,
-                progress: reviewStats.progress,
-              },
-            }
-          : null,
+        damageTypes,
+        volume,
         pages,
       };
     },

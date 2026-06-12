@@ -1,7 +1,30 @@
 (function (global) {
-  const { TYPES, MODES } = global.VolumeStorage;
+  const { MODES, DEFAULT_DAMAGE_TYPES } = global.VolumeStorage;
 
   const listeners = new Set();
+
+  function refreshMarkerTypeNames(state) {
+    const typeMap = Object.fromEntries(
+      state.damageTypes.map((t) => [t.id, t.name])
+    );
+    state.pages.forEach((p) => {
+      p.markers.forEach((m) => {
+        if (m.typeId && typeMap[m.typeId]) {
+          m.type = typeMap[m.typeId];
+        }
+      });
+    });
+  }
+
+  function usedTypeIds(state) {
+    const ids = new Set();
+    state.pages.forEach((p) => {
+      p.markers.forEach((m) => {
+        if (m.typeId) ids.add(m.typeId);
+      });
+    });
+    return ids;
+  }
 
   const VolumeState = {
     _state: null,
@@ -38,6 +61,26 @@
 
     get hasPages() {
       return this._state.pages.length > 0;
+    },
+
+    get damageTypes() {
+      return this._state.damageTypes;
+    },
+
+    get TYPES() {
+      return this._state.damageTypes.map((t) => t.name);
+    },
+
+    findTypeById(typeId) {
+      return this._state.damageTypes.find((t) => t.id === typeId) || null;
+    },
+
+    findTypeByName(name) {
+      return this._state.damageTypes.find((t) => t.name === name) || null;
+    },
+
+    isValidTypeId(typeId) {
+      return this._state.damageTypes.some((t) => t.id === typeId);
     },
 
     _touchCurrentPage() {
@@ -138,14 +181,23 @@
       return removed;
     },
 
-    addMarker({ type, note, x, y }) {
+    addMarker({ typeId, type, note, x, y }) {
       const page = this.currentPage;
       if (!page) return null;
-      if (!TYPES.includes(type)) return null;
+      let resolvedTypeId;
+      if (typeId && this.isValidTypeId(typeId)) {
+        resolvedTypeId = typeId;
+      } else if (type) {
+        const byName = this.findTypeByName(type);
+        if (byName) resolvedTypeId = byName.id;
+      }
+      if (!resolvedTypeId) return null;
+      const typeInfo = this.findTypeById(resolvedTypeId);
       const marker = {
         id: crypto.randomUUID(),
         mode: "point",
-        type,
+        typeId: resolvedTypeId,
+        type: typeInfo.name,
         note: (note || "").trim(),
         x: Number(Number(x).toFixed(2)),
         y: Number(Number(y).toFixed(2)),
@@ -158,14 +210,23 @@
       return marker;
     },
 
-    addRegion({ type, note, x, y, width, height }) {
+    addRegion({ typeId, type, note, x, y, width, height }) {
       const page = this.currentPage;
       if (!page) return null;
-      if (!TYPES.includes(type)) return null;
+      let resolvedTypeId;
+      if (typeId && this.isValidTypeId(typeId)) {
+        resolvedTypeId = typeId;
+      } else if (type) {
+        const byName = this.findTypeByName(type);
+        if (byName) resolvedTypeId = byName.id;
+      }
+      if (!resolvedTypeId) return null;
+      const typeInfo = this.findTypeById(resolvedTypeId);
       const marker = {
         id: crypto.randomUUID(),
         mode: "region",
-        type,
+        typeId: resolvedTypeId,
+        type: typeInfo.name,
         note: (note || "").trim(),
         x: Number(Number(x).toFixed(2)),
         y: Number(Number(y).toFixed(2)),
@@ -220,23 +281,113 @@
       this._notify();
     },
 
-    getMarkerCounts(page) {
-      const counts = Object.fromEntries(TYPES.map((t) => [t, 0]));
-      if (!page || !Array.isArray(page.markers)) return counts;
-      page.markers.forEach((m) => {
-        if (counts[m.type] !== undefined) counts[m.type] += 1;
+    addDamageType({ name, color }) {
+      if (!name || !name.trim()) return null;
+      const normalizedName = name.trim();
+      if (!color) return null;
+      if (this._state.damageTypes.some((t) => t.name === normalizedName)) {
+        return null;
+      }
+      const type = {
+        id: "type-" + crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        name: normalizedName,
+        color,
+      };
+      this._state.damageTypes.push(type);
+      this._persist();
+      this._notify();
+      return type;
+    },
+
+    renameDamageType(typeId, newName) {
+      if (!newName || !newName.trim()) return false;
+      const normalizedName = newName.trim();
+      const existing = this._state.damageTypes.find((t) => t.id === typeId);
+      if (!existing) return false;
+      if (
+        this._state.damageTypes.some(
+          (t) => t.id !== typeId && t.name === normalizedName
+        )
+      ) {
+        return false;
+      }
+      existing.name = normalizedName;
+      refreshMarkerTypeNames(this._state);
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    setDamageTypeColor(typeId, color) {
+      if (!color) return false;
+      const existing = this._state.damageTypes.find((t) => t.id === typeId);
+      if (!existing) return false;
+      existing.color = color;
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    deleteDamageType(typeId, targetTypeId) {
+      const existingIdx = this._state.damageTypes.findIndex(
+        (t) => t.id === typeId
+      );
+      if (existingIdx === -1) return false;
+      if (this._state.damageTypes.length <= 1) return false;
+      let resolvedTarget = targetTypeId;
+      if (!resolvedTarget || !this.isValidTypeId(resolvedTarget) || resolvedTarget === typeId) {
+        resolvedTarget = this._state.damageTypes.find((t) => t.id !== typeId).id;
+      }
+      const targetType = this.findTypeById(resolvedTarget);
+      this._state.pages.forEach((p) => {
+        p.markers.forEach((m) => {
+          if (m.typeId === typeId) {
+            m.typeId = resolvedTarget;
+            m.type = targetType ? targetType.name : m.type;
+          }
+        });
       });
-      return counts;
+      this._state.damageTypes.splice(existingIdx, 1);
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    getUsedTypeIds() {
+      return usedTypeIds(this._state);
+    },
+
+    getMarkerCounts(page) {
+      const types = this._state.damageTypes;
+      const counts = Object.fromEntries(types.map((t) => [t.id, 0]));
+      const nameCounts = Object.fromEntries(types.map((t) => [t.name, 0]));
+      if (!page || !Array.isArray(page.markers)) {
+        return { byId: counts, byName: nameCounts, types };
+      }
+      page.markers.forEach((m) => {
+        if (m.typeId && counts[m.typeId] !== undefined) {
+          counts[m.typeId] += 1;
+          const t = this.findTypeById(m.typeId);
+          if (t) nameCounts[t.name] += 1;
+        }
+      });
+      return { byId: counts, byName: nameCounts, types };
     },
 
     getTotalCounts() {
-      const counts = Object.fromEntries(TYPES.map((t) => [t, 0]));
+      const types = this._state.damageTypes;
+      const counts = Object.fromEntries(types.map((t) => [t.id, 0]));
+      const nameCounts = Object.fromEntries(types.map((t) => [t.name, 0]));
       this._state.pages.forEach((p) =>
         p.markers.forEach((m) => {
-          if (counts[m.type] !== undefined) counts[m.type] += 1;
+          if (m.typeId && counts[m.typeId] !== undefined) {
+            counts[m.typeId] += 1;
+            const t = this.findTypeById(m.typeId);
+            if (t) nameCounts[t.name] += 1;
+          }
         })
       );
-      return counts;
+      return { byId: counts, byName: nameCounts, types };
     },
 
     getTotalMarkers() {

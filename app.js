@@ -4,9 +4,9 @@
   const Render = window.VolumeRender;
 
   const imageInput = document.getElementById("imageInput");
-  const typeInput = document.getElementById("typeInput");
   const noteInput = document.getElementById("noteInput");
   const stage = document.getElementById("stage");
+  const configBtn = document.getElementById("configBtn");
   const reviewBtn = document.getElementById("reviewBtn");
   const exportBtn = document.getElementById("exportBtn");
   const clearBtn = document.getElementById("clearBtn");
@@ -96,8 +96,9 @@
     if (!page || !page.image) return;
 
     const { x, y } = computeRelativeCoords(event.clientX, event.clientY);
+    const selectedTypeId = Render.getSelectedTypeId();
     const marker = State.addMarker({
-      type: typeInput.value,
+      typeId: selectedTypeId,
       note: noteInput.value,
       x,
       y,
@@ -147,8 +148,9 @@
     dragState = null;
     document.body.classList.remove("dragging-region");
     if (resultW >= 1 && resultH >= 1) {
+      const selectedTypeId = Render.getSelectedTypeId();
       const marker = State.addRegion({
-        type: typeInput.value,
+        typeId: selectedTypeId,
         note: noteInput.value,
         x: Number(resultX.toFixed(2)),
         y: Number(resultY.toFixed(2)),
@@ -256,6 +258,10 @@
   function bindEvents() {
     imageInput.addEventListener("change", () => {
       handleFiles(imageInput.files);
+    });
+
+    configBtn.addEventListener("click", () => {
+      Render.openTypeConfig();
     });
 
     stage.addEventListener("click", handleStageClick);

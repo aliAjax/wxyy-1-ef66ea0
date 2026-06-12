@@ -24,6 +24,7 @@
         </label>
       </div>
       <div class="actions">
+        <button id="configBtn" type="button" title="配置损伤类型">⚙ 类型配置</button>
         <button id="reviewBtn" type="button" title="进入复核工作台">复核工作台</button>
         <button id="exportBtn" type="button" title="导出JSON">导出</button>
         <button id="clearBtn" type="button" title="清空当前页记录">清空本页</button>
@@ -92,6 +93,47 @@
       </aside>
     </section>
   </main>
+
+  <div class="modal-overlay" id="typeConfigModal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>损伤类型配置</h2>
+        <button class="modal-close" id="closeConfigBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">可新增、重命名、删除损伤类型并选择颜色。删除类型时，其已有标记会被迁移到其他类型。</p>
+        <div id="typeConfigList" class="type-config-list"></div>
+        <div class="type-add-row">
+          <input id="newTypeName" type="text" placeholder="新类型名称，如：水渍" maxlength="20" />
+          <input id="newTypeColor" type="color" value="#5b7fa3" title="选择颜色" />
+          <button id="addTypeBtn" type="button" class="primary">新增类型</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="closeConfigFooterBtn" type="button">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="deleteTypeModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h3>删除损伤类型</h3>
+        <button class="modal-close" id="closeDeleteTypeBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <p id="deleteTypeMsg" style="margin-bottom:14px;color:var(--muted);"></p>
+        <label>
+          <span>将已有标记迁移至：</span>
+          <select id="migrateTypeTarget"></select>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelDeleteTypeBtn" type="button">取消</button>
+        <button id="confirmDeleteTypeBtn" type="button" class="danger">确认删除并迁移</button>
+      </div>
+    </div>
+  </div>
 
   <script src="./js/storage.js"></script>
   <script src="./js/state.js"></script>
