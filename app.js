@@ -125,16 +125,8 @@
       alert("当前没有页面可清空。");
       return;
     }
-    const hasMarkers = page.markers.length > 0;
-    const msg = hasMarkers
-      ? "确认清空当前页的全部标记？此操作不可撤销。"
-      : "当前页尚无标记，是否同时移除扫描页图像？";
-    if (!confirm(msg)) return;
-    if (hasMarkers) {
-      State.clearCurrentMarkers();
-    } else {
-      State.clearCurrentPage();
-    }
+    if (!confirm("清空当前扫描页和全部标记？此操作不可撤销。")) return;
+    State.clearCurrentPage();
   }
 
   function handleClearAll() {

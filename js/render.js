@@ -82,11 +82,7 @@
               </div>
               <button class="page-remove" type="button" data-remove="${page.id}" title="移除本页">×</button>
             </div>
-            ${
-              count > 0
-                ? `<span class="page-count" title="损伤标记数">${count}</span>`
-                : ""
-            }
+            <span class="page-count${count === 0 ? " zero" : ""}" title="损伤标记数">${count}</span>
           </article>
         `;
       })

@@ -267,6 +267,11 @@ button.danger:hover {
   text-align: center;
 }
 
+.page-count.zero {
+  color: var(--muted);
+  background: rgba(119, 107, 95, 0.1);
+}
+
 .page-remove {
   margin-top: 2px;
   width: 20px;
