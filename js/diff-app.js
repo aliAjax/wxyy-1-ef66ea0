@@ -154,18 +154,33 @@
 
     try {
       const text = await readFileAsText(file);
-      let data;
+      let rawData;
       try {
-        data = JSON.parse(text);
+        rawData = JSON.parse(text);
       } catch (e) {
         showToast('文件解析失败：JSON 格式无效', 'error');
         return;
       }
 
-      const validation = validatePackage(data);
-      if (!validation.valid) {
-        showToast('文件格式无效：' + validation.error, 'error');
-        return;
+      const fmt = window.ProjectPackage ? window.ProjectPackage.detectFormat(rawData) : null;
+      if (!fmt) {
+        const validation = validatePackage(rawData);
+        if (!validation.valid) {
+          showToast('文件格式无效：' + validation.error, 'error');
+          return;
+        }
+      }
+
+      let data;
+      try {
+        if (window.ProjectPackage && fmt) {
+          data = window.ProjectPackage.migrateCurrentVersion(rawData);
+        } else {
+          data = rawData;
+        }
+      } catch (e) {
+        console.warn('格式迁移失败，使用原始数据：', e);
+        data = rawData;
       }
 
       const pageInfo = extractPageInfo(data, state.pageIndex);
@@ -523,23 +538,79 @@
     const merged = mergeMarkers(state.diffResults, options);
 
     const baseData = state.dataA || state.dataB;
+
+    if (window.ProjectPackage) {
+      try {
+        const baseState = window.ProjectPackage.packageToState(baseData);
+        if (baseState.pages && baseState.pages[state.pageIndex]) {
+          baseState.pages[state.pageIndex].markers = merged.map(({
+            _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
+            _center, _type, _note, ...rest
+          }) => rest);
+          baseState.pages[state.pageIndex].updatedAt = new Date().toISOString();
+        }
+        baseState.updatedAt = new Date().toISOString();
+
+        if (baseData.format === window.ProjectPackage.PACKAGE_FORMAT
+          && baseData.project
+          && baseData.project.title) {
+          baseState.volumeTitle = baseData.project.title + '（合并）';
+        } else if (baseData.volume && baseData.volume.title) {
+          baseState.volumeTitle = baseData.volume.title + '（合并）';
+        } else {
+          baseState.volumeTitle = (baseState.volumeTitle || '合并结果') + '（合并）';
+        }
+
+        const exportOptions = { includeImages: true };
+        const pkg = window.ProjectPackage.exportPackage(baseState, exportOptions);
+        pkg._mergedFrom = {
+          fileA: state.fileA ? state.fileA.name : 'A',
+          fileB: state.fileB ? state.fileB.name : 'B',
+          mergeOptions: options,
+          statistics: state.statistics,
+          mergedAt: new Date().toISOString(),
+        };
+        delete pkg._checksum;
+        pkg._checksum = window.ProjectPackage.computeChecksum(pkg);
+
+        window.ProjectPackage.downloadPackage(pkg);
+        showToast(`合并结果已导出，共 ${merged.length} 条标记`, 'success');
+        return;
+      } catch (e) {
+        console.warn('标准导出流程失败，回退至基础导出：', e);
+      }
+    }
+
+    const fallbackMarkers = merged.map(({
+      _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
+      _center, _type, _note, ...rest
+    }) => rest);
+
     const exportData = {
-      format: 'archive-volume-damage-merged',
-      formatVersion: '1.0',
+      format: 'archive-volume-damage',
+      formatVersion: '1.1',
       exportedAt: new Date().toISOString(),
-      mergedFrom: {
+      _mergedFrom: {
         fileA: state.fileA ? state.fileA.name : 'A',
         fileB: state.fileB ? state.fileB.name : 'B',
         mergeOptions: options,
         statistics: state.statistics,
+        mergedAt: new Date().toISOString(),
       },
-      volume: baseData.volume || {
-        title: '合并标注结果',
+      volume: {
+        ...(baseData.volume || {}),
+        title: (baseData.volume && baseData.volume.title
+          ? baseData.volume.title
+          : (baseData.project && baseData.project.title
+            ? baseData.project.title
+            : '合并标注结果')) + '（合并）',
+        updatedAt: new Date().toISOString(),
       },
       pages: [
         {
           ...(baseData.pages && baseData.pages[state.pageIndex] ? baseData.pages[state.pageIndex] : {}),
-          markers: merged.map(({ _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData, ...rest }) => rest),
+          markers: fallbackMarkers,
+          updatedAt: new Date().toISOString(),
         },
       ],
       damageTypes: baseData.damageTypes || [],
