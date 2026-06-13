@@ -422,19 +422,19 @@
 
     if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
       var imageInfo = Render.imageViewer.getImageInfo();
-      if (packageObj.pages) {
-        packageObj.pages.forEach(function (pageData) {
-          var statePage = state.pages.find(function (p) { return p.id === pageData.id; });
-          if (statePage && statePage.image && statePage.markers.length > 0) {
-            pageData.imageWidth = imageInfo.naturalWidth;
-            pageData.imageHeight = imageInfo.naturalHeight;
-            if (statePage === State.currentPage) {
-              pageData.markers = statePage.markers
-                .map(function (m) { return Render.imageViewer.exportRealCoords(m); })
-                .filter(Boolean);
-            }
+      var currentPageId = State.currentPage && State.currentPage.id;
+      if (currentPageId && packageObj.pages) {
+        var currentPageData = packageObj.pages.find(function (p) { return p.id === currentPageId; });
+        var currentStatePage = state.pages.find(function (p) { return p.id === currentPageId; });
+        if (currentPageData && currentStatePage && currentStatePage.image) {
+          currentPageData.imageWidth = imageInfo.naturalWidth;
+          currentPageData.imageHeight = imageInfo.naturalHeight;
+          if (currentStatePage.markers && currentStatePage.markers.length > 0) {
+            currentPageData.markers = currentStatePage.markers
+              .map(function (m) { return Render.imageViewer.exportRealCoords(m); })
+              .filter(Boolean);
           }
-        });
+        }
       }
     }
 
