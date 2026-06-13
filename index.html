@@ -24,6 +24,7 @@
         </label>
       </div>
       <div class="actions">
+        <button id="viewerModeBtn" type="button" title="切换超大扫描页查看器模式" class="primary">🔍 超大查看器</button>
         <button id="configBtn" type="button" title="配置损伤类型">⚙ 类型配置</button>
         <button id="reviewBtn" type="button" title="进入复核工作台">复核工作台</button>
         <button id="exportBtn" type="button" title="导出JSON">导出</button>
@@ -74,12 +75,44 @@
       </aside>
 
       <section class="canvas-panel">
-        <div class="image-stage" id="stage">
-          <div class="empty" id="emptyState">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
-          <img id="pageImage" alt="古籍扫描页" />
-          <div id="markers" class="markers"></div>
-          <div id="dragOverlay" class="drag-overlay"></div>
+        <div class="viewer-toolbar" id="viewerToolbar" style="display:none;">
+          <div class="viewer-toolbar-group">
+            <button id="zoomOutBtn" type="button" title="缩小">−</button>
+            <span class="zoom-indicator" id="zoomIndicator">100%</span>
+            <button id="zoomInBtn" type="button" title="放大">+</button>
+          </div>
+          <div class="viewer-toolbar-group">
+            <button id="fitBtn" type="button" title="适配窗口">⤢ 适配</button>
+            <button id="actualSizeBtn" type="button" title="实际大小">⌖ 原图</button>
+            <button id="resetBtn" type="button" title="重置视图">⟲ 重置</button>
+          </div>
+          <div class="viewer-toolbar-group viewer-info">
+            <span id="imageInfoText">图片尺寸：—</span>
+          </div>
+          <div class="viewer-toolbar-group">
+            <button id="exportCoordsBtn" type="button" title="导出真实坐标">⬇ 导出坐标</button>
+            <button id="exitViewerBtn" type="button" title="退出超大查看器模式">✕ 退出</button>
+          </div>
         </div>
+
+        <div class="viewer-viewport" id="viewerViewport">
+          <div class="viewer-stage" id="viewerStage">
+            <div class="viewer-content" id="viewerContent">
+              <div class="empty" id="emptyState">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
+              <img id="pageImage" alt="古籍扫描页" />
+              <div id="markers" class="markers"></div>
+              <div id="dragOverlay" class="drag-overlay"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="image-stage" id="stage" style="display:none;">
+          <div class="empty" id="emptyStateSimple">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
+          <img id="pageImageSimple" alt="古籍扫描页" />
+          <div id="markersSimple" class="markers"></div>
+          <div id="dragOverlaySimple" class="drag-overlay"></div>
+        </div>
+
         <div class="page-nav" id="pageNav" style="display:none;">
           <button id="prevPage" type="button" title="上一页">← 上一页</button>
           <span class="page-indicator" id="pageIndicator"></span>
@@ -138,6 +171,7 @@
   <script src="./js/storage.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/render.js"></script>
+  <script src="./js/image-viewer.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

@@ -8,8 +8,11 @@
     pagesEmpty: null,
     pagesList: null,
     pageImage: null,
+    pageImageSimple: null,
     emptyState: null,
+    emptyStateSimple: null,
     markersLayer: null,
+    markersLayerSimple: null,
     typeInput: null,
     stats: null,
     statsTotal: null,
@@ -20,6 +23,22 @@
     nextPage: null,
     modeSwitch: null,
     dragOverlay: null,
+    dragOverlaySimple: null,
+    stage: null,
+    viewerViewport: null,
+    viewerStage: null,
+    viewerContent: null,
+    viewerToolbar: null,
+    viewerModeBtn: null,
+    zoomInBtn: null,
+    zoomOutBtn: null,
+    zoomIndicator: null,
+    fitBtn: null,
+    actualSizeBtn: null,
+    resetBtn: null,
+    imageInfoText: null,
+    exportCoordsBtn: null,
+    exitViewerBtn: null,
     typeConfigModal: null,
     closeConfigBtn: null,
     closeConfigFooterBtn: null,
@@ -35,14 +54,21 @@
     migrateTypeTarget: null,
   };
 
+  let viewerMode = false;
+  let imageViewer = null;
+  let pendingDeleteTypeId = null;
+
   function initDoms() {
     Doms.volumeId = document.getElementById("volumeId");
     Doms.volumeTitle = document.getElementById("volumeTitle");
     Doms.pagesEmpty = document.getElementById("pagesEmpty");
     Doms.pagesList = document.getElementById("pagesList");
     Doms.pageImage = document.getElementById("pageImage");
+    Doms.pageImageSimple = document.getElementById("pageImageSimple");
     Doms.emptyState = document.getElementById("emptyState");
+    Doms.emptyStateSimple = document.getElementById("emptyStateSimple");
     Doms.markersLayer = document.getElementById("markers");
+    Doms.markersLayerSimple = document.getElementById("markersSimple");
     Doms.typeInput = document.getElementById("typeInput");
     Doms.stats = document.getElementById("stats");
     Doms.statsTotal = document.getElementById("statsTotal");
@@ -53,6 +79,22 @@
     Doms.nextPage = document.getElementById("nextPage");
     Doms.modeSwitch = document.getElementById("modeSwitch");
     Doms.dragOverlay = document.getElementById("dragOverlay");
+    Doms.dragOverlaySimple = document.getElementById("dragOverlaySimple");
+    Doms.stage = document.getElementById("stage");
+    Doms.viewerViewport = document.getElementById("viewerViewport");
+    Doms.viewerStage = document.getElementById("viewerStage");
+    Doms.viewerContent = document.getElementById("viewerContent");
+    Doms.viewerToolbar = document.getElementById("viewerToolbar");
+    Doms.viewerModeBtn = document.getElementById("viewerModeBtn");
+    Doms.zoomInBtn = document.getElementById("zoomInBtn");
+    Doms.zoomOutBtn = document.getElementById("zoomOutBtn");
+    Doms.zoomIndicator = document.getElementById("zoomIndicator");
+    Doms.fitBtn = document.getElementById("fitBtn");
+    Doms.actualSizeBtn = document.getElementById("actualSizeBtn");
+    Doms.resetBtn = document.getElementById("resetBtn");
+    Doms.imageInfoText = document.getElementById("imageInfoText");
+    Doms.exportCoordsBtn = document.getElementById("exportCoordsBtn");
+    Doms.exitViewerBtn = document.getElementById("exitViewerBtn");
     Doms.typeConfigModal = document.getElementById("typeConfigModal");
     Doms.closeConfigBtn = document.getElementById("closeConfigBtn");
     Doms.closeConfigFooterBtn = document.getElementById("closeConfigFooterBtn");
@@ -85,6 +127,80 @@
     if (byName) return byName.color;
     const fallback = State.damageTypes && State.damageTypes[0];
     return fallback ? fallback.color : "#9d3f2f";
+  }
+
+  function initImageViewer() {
+    if (imageViewer) return;
+    if (!global.ImageViewer) return;
+
+    imageViewer = new global.ImageViewer({
+      viewport: Doms.viewerViewport,
+      stage: Doms.viewerStage,
+      content: Doms.viewerContent,
+      image: Doms.pageImage,
+      markersLayer: Doms.markersLayer,
+      dragOverlay: Doms.dragOverlay,
+    });
+
+    imageViewer.on("imageLoaded", (info) => {
+      updateImageInfo(info);
+      renderMarkers();
+    });
+
+    imageViewer.on("transformChanged", (info) => {
+      updateZoomIndicator(info.scale);
+      renderMarkers();
+    });
+
+    imageViewer.on("fitToViewport", (info) => {
+      updateZoomIndicator(info.scale);
+    });
+  }
+
+  function updateZoomIndicator(scale) {
+    if (Doms.zoomIndicator) {
+      Doms.zoomIndicator.textContent = Math.round(scale * 100) + "%";
+    }
+  }
+
+  function updateImageInfo(info) {
+    if (Doms.imageInfoText && info && info.width && info.height) {
+      Doms.imageInfoText.textContent = `图片尺寸：${info.width} × ${info.height} px`;
+    }
+  }
+
+  function setViewerMode(enabled) {
+    viewerMode = enabled;
+
+    if (enabled) {
+      initImageViewer();
+      Doms.stage.style.display = "none";
+      Doms.viewerViewport.style.display = "block";
+      Doms.viewerToolbar.style.display = "flex";
+      Doms.viewerModeBtn.textContent = "📄 普通模式";
+      Doms.viewerModeBtn.classList.remove("primary");
+      document.body.classList.add("viewer-mode");
+      document.body.classList.remove("simple-mode");
+    } else {
+      Doms.stage.style.display = "block";
+      Doms.viewerViewport.style.display = "none";
+      Doms.viewerToolbar.style.display = "none";
+      Doms.viewerModeBtn.textContent = "🔍 超大查看器";
+      Doms.viewerModeBtn.classList.add("primary");
+      document.body.classList.remove("viewer-mode");
+      document.body.classList.add("simple-mode");
+    }
+
+    renderCanvas();
+  }
+
+  function toggleViewerMode() {
+    const page = State.currentPage;
+    if (!page || !page.image) {
+      alert("请先导入扫描页后再使用超大查看器模式。");
+      return;
+    }
+    setViewerMode(!viewerMode);
   }
 
   function renderTypeInput() {
@@ -157,51 +273,118 @@
       .join("");
   }
 
+  function getActiveStageElements() {
+    if (viewerMode) {
+      return {
+        image: Doms.pageImage,
+        emptyState: Doms.emptyState,
+        markersLayer: Doms.markersLayer,
+        dragOverlay: Doms.dragOverlay,
+      };
+    }
+    return {
+      image: Doms.pageImageSimple,
+      emptyState: Doms.emptyStateSimple,
+      markersLayer: Doms.markersLayerSimple,
+      dragOverlay: Doms.dragOverlaySimple,
+    };
+  }
+
+  function renderMarkerHtml(marker, style) {
+    const color = getColorForMarker(marker);
+    const fill = hexWithAlpha(color, 0.15);
+    const typeInfo = State.findTypeById(marker.typeId) || { name: marker.type };
+    const title = `${marker.mode === "region" ? "[区域] " : ""}${typeInfo.name}${marker.note ? "：" + marker.note : ""}`;
+
+    let styleStr = "";
+    for (const key in style) {
+      styleStr += `${key}:${style[key]};`;
+    }
+
+    if (marker.mode === "region") {
+      return `
+        <span class="region-marker"
+              data-type="${escapeHtml(typeInfo.name)}"
+              data-type-id="${marker.typeId}"
+              data-marker="${marker.id}"
+              title="${escapeHtml(title)}"
+              style="${styleStr}border-color:${color};background:${fill};">
+          <span class="region-label" style="background:${color};">${escapeHtml(typeInfo.name)}</span>
+        </span>
+      `;
+    }
+    return `
+      <span class="marker"
+            data-type="${escapeHtml(typeInfo.name)}"
+            data-type-id="${marker.typeId}"
+            data-marker="${marker.id}"
+            title="${escapeHtml(title)}"
+            style="${styleStr}background:${color};"></span>
+    `;
+  }
+
+  function renderMarkers() {
+    const page = State.currentPage;
+    const { markersLayer } = getActiveStageElements();
+
+    if (!page || !page.image || !markersLayer) return;
+
+    if (viewerMode && imageViewer && imageViewer.imageLoaded) {
+      markersLayer.innerHTML = page.markers
+        .map((m) => {
+          const style = imageViewer.getMarkerStageStyle(m);
+          return renderMarkerHtml(m, style);
+        })
+        .join("");
+    } else {
+      markersLayer.innerHTML = page.markers
+        .map((m) => {
+          if (m.mode === "region") {
+            return renderMarkerHtml(m, {
+              left: m.x + "%",
+              top: m.y + "%",
+              width: m.width + "%",
+              height: m.height + "%",
+            });
+          }
+          return renderMarkerHtml(m, {
+            left: m.x + "%",
+            top: m.y + "%",
+          });
+        })
+        .join("");
+    }
+  }
+
   function renderCanvas() {
     const page = State.currentPage;
+    const { image, emptyState, markersLayer } = getActiveStageElements();
 
     if (!page || !page.image) {
-      Doms.pageImage.removeAttribute("src");
-      Doms.pageImage.style.display = "none";
-      Doms.emptyState.style.display = "grid";
-      Doms.markersLayer.innerHTML = "";
+      if (image) {
+        image.removeAttribute("src");
+        image.style.display = "none";
+      }
+      if (emptyState) emptyState.style.display = "grid";
+      if (markersLayer) markersLayer.innerHTML = "";
       return;
     }
 
-    if (Doms.pageImage.src !== page.image) {
-      Doms.pageImage.src = page.image;
+    if (image.src !== page.image) {
+      image.src = page.image;
     }
-    Doms.pageImage.style.display = "block";
-    Doms.emptyState.style.display = "none";
+    image.style.display = "block";
+    if (emptyState) emptyState.style.display = "none";
 
-    Doms.markersLayer.innerHTML = page.markers
-      .map((m) => {
-        const color = getColorForMarker(m);
-        const fill = hexWithAlpha(color, 0.15);
-        const typeInfo = State.findTypeById(m.typeId) || { name: m.type };
-        const title = `${m.mode === "region" ? "[区域] " : ""}${typeInfo.name}${m.note ? "：" + m.note : ""}`;
-        if (m.mode === "region") {
-          return `
-            <span class="region-marker"
-                  data-type="${escapeHtml(typeInfo.name)}"
-                  data-type-id="${m.typeId}"
-                  data-marker="${m.id}"
-                  title="${escapeHtml(title)}"
-                  style="left:${m.x}%;top:${m.y}%;width:${m.width}%;height:${m.height}%;border-color:${color};background:${fill};">
-              <span class="region-label" style="background:${color};">${escapeHtml(typeInfo.name)}</span>
-            </span>
-          `;
-        }
-        return `
-          <span class="marker"
-                data-type="${escapeHtml(typeInfo.name)}"
-                data-type-id="${m.typeId}"
-                data-marker="${m.id}"
-                title="${escapeHtml(title)}"
-                style="left:${m.x}%;top:${m.y}%;background:${color};"></span>
-        `;
-      })
-      .join("");
+    if (viewerMode && imageViewer && !imageViewer.imageLoaded) {
+      const dims = imageViewer._getImageDimensions();
+      if (dims.width > 0 && dims.height > 0) {
+        imageViewer._onImageLoad();
+        imageViewer.fitToViewport();
+      }
+    }
+
+    renderMarkers();
   }
 
   function renderStats() {
@@ -270,13 +453,25 @@
         const modeTag = isRegion
           ? '<span class="record-mode mode-region">区域</span>'
           : '<span class="record-mode mode-point">点</span>';
-        const dims = isRegion
-          ? `<span class="region-dims">${marker.width}% × ${marker.height}%</span>`
-          : "";
+
+        let dims = "";
+        if (isRegion) {
+          if (marker.realWidth !== undefined && marker.realHeight !== undefined) {
+            dims = `<span class="region-dims">${marker.realWidth} × ${marker.realHeight} px</span>`;
+          } else {
+            dims = `<span class="region-dims">${marker.width}% × ${marker.height}%</span>`;
+          }
+        }
+
+        let coords = "";
+        if (marker.realX !== undefined && marker.realY !== undefined) {
+          coords = `<br /><span style="font-family:'SF Mono',Monaco,Consolas,monospace;font-size:11px;">坐标：(${marker.realX}, ${marker.realY}) px</span>`;
+        }
+
         return `
           <article class="record">
             <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}</strong>
-            <p>${note}${dims}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
+            <p>${note}${dims}${coords}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
             <button type="button" data-delete="${marker.id}">删除</button>
           </article>
         `;
@@ -346,8 +541,6 @@
     if (Doms.newTypeName) Doms.newTypeName.value = "";
   }
 
-  let pendingDeleteTypeId = null;
-
   function openDeleteConfirm(typeId) {
     const type = State.findTypeById(typeId);
     if (!type) return;
@@ -395,6 +588,45 @@
     }
   }
 
+  function exportRealCoords() {
+    if (!viewerMode || !imageViewer || !imageViewer.imageLoaded) {
+      alert("请先进入超大查看器模式并加载图片。");
+      return;
+    }
+
+    const page = State.currentPage;
+    if (!page) return;
+
+    const imageInfo = imageViewer.getImageInfo();
+    const markers = page.markers.map((m) => imageViewer.exportRealCoords(m)).filter(Boolean);
+
+    const payload = {
+      format: "archive-volume-damage-real-coords",
+      formatVersion: "1.0",
+      exportedAt: new Date().toISOString(),
+      page: {
+        id: page.id,
+        name: page.name,
+        fileName: page.fileName,
+        imageWidth: imageInfo.naturalWidth,
+        imageHeight: imageInfo.naturalHeight,
+      },
+      markers,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    const namePart = (page.name || page.fileName || "coords").replace(/[\\/:*?"<>|\s]+/g, "_");
+    link.download = `${namePart}_real_coords.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+  }
+
   function attachDelegates() {
     Doms.pagesList.addEventListener("click", (event) => {
       const removeBtn = event.target.closest("[data-remove]");
@@ -424,6 +656,13 @@
     });
 
     Doms.markersLayer.addEventListener("click", (event) => {
+      const markerEl = event.target.closest("[data-marker]");
+      if (!markerEl) return;
+      const id = markerEl.dataset.marker;
+      if (confirm("删除此标记？")) State.removeMarker(id);
+    });
+
+    Doms.markersLayerSimple.addEventListener("click", (event) => {
       const markerEl = event.target.closest("[data-marker]");
       if (!markerEl) return;
       const id = markerEl.dataset.marker;
@@ -513,18 +752,72 @@
         }
       }
     });
+
+    if (Doms.viewerModeBtn) {
+      Doms.viewerModeBtn.addEventListener("click", toggleViewerMode);
+    }
+
+    if (Doms.zoomInBtn) {
+      Doms.zoomInBtn.addEventListener("click", () => {
+        if (imageViewer) imageViewer.zoomIn();
+      });
+    }
+
+    if (Doms.zoomOutBtn) {
+      Doms.zoomOutBtn.addEventListener("click", () => {
+        if (imageViewer) imageViewer.zoomOut();
+      });
+    }
+
+    if (Doms.fitBtn) {
+      Doms.fitBtn.addEventListener("click", () => {
+        if (imageViewer) imageViewer.fitToViewport();
+      });
+    }
+
+    if (Doms.actualSizeBtn) {
+      Doms.actualSizeBtn.addEventListener("click", () => {
+        if (imageViewer) imageViewer.setActualSize();
+      });
+    }
+
+    if (Doms.resetBtn) {
+      Doms.resetBtn.addEventListener("click", () => {
+        if (imageViewer) imageViewer.resetView();
+      });
+    }
+
+    if (Doms.exportCoordsBtn) {
+      Doms.exportCoordsBtn.addEventListener("click", exportRealCoords);
+    }
+
+    if (Doms.exitViewerBtn) {
+      Doms.exitViewerBtn.addEventListener("click", () => setViewerMode(false));
+    }
   }
 
   const VolumeRender = {
     init() {
       initDoms();
       attachDelegates();
+      setViewerMode(false);
       renderAll();
     },
     refresh: renderAll,
     openTypeConfig,
     closeTypeConfig,
     getSelectedTypeId,
+    get viewerMode() {
+      return viewerMode;
+    },
+    get imageViewer() {
+      return imageViewer;
+    },
+    setViewerMode,
+    toggleViewerMode,
+    getActiveStageElements,
+    exportRealCoords,
+    renderMarkers,
     Doms,
   };
 

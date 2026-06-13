@@ -5,17 +5,19 @@
 
   const imageInput = document.getElementById("imageInput");
   const noteInput = document.getElementById("noteInput");
-  const stage = document.getElementById("stage");
   const configBtn = document.getElementById("configBtn");
   const reviewBtn = document.getElementById("reviewBtn");
   const exportBtn = document.getElementById("exportBtn");
   const clearBtn = document.getElementById("clearBtn");
   const clearAllBtn = document.getElementById("clearAllBtn");
   const modeSwitch = document.getElementById("modeSwitch");
-  const dragOverlay = document.getElementById("dragOverlay");
 
   let currentMode = "point";
   let dragState = null;
+
+  function getActiveElements() {
+    return Render.getActiveStageElements();
+  }
 
   function setMode(mode) {
     if (mode !== "point" && mode !== "region") return;
@@ -24,11 +26,17 @@
     btns.forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.mode === mode);
     });
-    if (mode === "region") {
-      dragOverlay.classList.add("active");
+
+    const { dragOverlay } = getActiveElements();
+    if (Render.viewerMode && Render.imageViewer) {
+      Render.imageViewer.setRegionDrawingMode(mode === "region");
     } else {
-      dragOverlay.classList.remove("active");
-      cancelDrag();
+      if (mode === "region") {
+        dragOverlay.classList.add("active");
+      } else {
+        dragOverlay.classList.remove("active");
+        cancelDrag();
+      }
     }
   }
 
@@ -75,12 +83,32 @@
       if (last && files.length === 1) {
         State.switchPage(last.id);
       }
+      setTimeout(() => {
+        if (Render.viewerMode && Render.imageViewer) {
+          Render.imageViewer.fitToViewport();
+        }
+      }, 100);
     }
     imageInput.value = "";
   }
 
-  function computeRelativeCoords(clientX, clientY) {
-    const rect = stage.getBoundingClientRect();
+  function computeCoords(clientX, clientY) {
+    const { dragOverlay } = getActiveElements();
+    const rect = dragOverlay.getBoundingClientRect();
+
+    if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
+      const viewportX = clientX - rect.left;
+      const viewportY = clientY - rect.top;
+      const real = Render.imageViewer.viewportToReal(viewportX, viewportY);
+      const percent = Render.imageViewer.realToPercent(real.x, real.y);
+      return {
+        x: percent.x,
+        y: percent.y,
+        realX: Number(real.x.toFixed(2)),
+        realY: Number(real.y.toFixed(2)),
+      };
+    }
+
     const x = ((clientX - rect.left) / rect.width) * 100;
     const y = ((clientY - rect.top) / rect.height) * 100;
     return {
@@ -92,17 +120,30 @@
   function handleStageClick(event) {
     if (currentMode !== "point") return;
     if (event.target.closest("button, [data-marker]")) return;
+
     const page = State.currentPage;
     if (!page || !page.image) return;
 
-    const { x, y } = computeRelativeCoords(event.clientX, event.clientY);
+    if (Render.viewerMode && Render.imageViewer && Render.imageViewer.isPanning) {
+      return;
+    }
+
+    const coords = computeCoords(event.clientX, event.clientY);
     const selectedTypeId = Render.getSelectedTypeId();
-    const marker = State.addMarker({
+
+    const markerData = {
       typeId: selectedTypeId,
       note: noteInput.value,
-      x,
-      y,
-    });
+      x: coords.x,
+      y: coords.y,
+    };
+
+    if (coords.realX !== undefined) {
+      markerData.realX = coords.realX;
+      markerData.realY = coords.realY;
+    }
+
+    const marker = State.addMarker(markerData);
     if (marker) {
       noteInput.value = "";
     }
@@ -112,33 +153,91 @@
     if (currentMode !== "region") return;
     const page = State.currentPage;
     if (!page || !page.image) return;
+
+    const { dragOverlay } = getActiveElements();
     const rect = dragOverlay.getBoundingClientRect();
-    const startX = ((clientX - rect.left) / rect.width) * 100;
-    const startY = ((clientY - rect.top) / rect.height) * 100;
     const el = document.createElement("div");
     el.className = "drag-rect";
     dragOverlay.appendChild(el);
-    dragState = { el, startX, startY, clientStartX: clientX, clientStartY: clientY };
+
+    dragState = {
+      el,
+      clientStartX: clientX,
+      clientStartY: clientY,
+      rect,
+    };
+
+    if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
+      const startViewportX = clientX - rect.left;
+      const startViewportY = clientY - rect.top;
+      const real = Render.imageViewer.viewportToReal(startViewportX, startViewportY);
+      dragState.startRealX = real.x;
+      dragState.startRealY = real.y;
+      el.style.position = "absolute";
+      el.style.pointerEvents = "none";
+    } else {
+      const startX = ((clientX - rect.left) / rect.width) * 100;
+      const startY = ((clientY - rect.top) / rect.height) * 100;
+      dragState.startX = startX;
+      dragState.startY = startY;
+    }
+
     document.body.classList.add("dragging-region");
   }
 
   function moveDrag(clientX, clientY) {
     if (!dragState) return;
+
+    const { dragOverlay } = getActiveElements();
     const rect = dragOverlay.getBoundingClientRect();
-    const curX = ((clientX - rect.left) / rect.width) * 100;
-    const curY = ((clientY - rect.top) / rect.height) * 100;
-    const left = Math.max(0, Math.min(dragState.startX, curX));
-    const top = Math.max(0, Math.min(dragState.startY, curY));
-    const right = Math.min(100, Math.max(dragState.startX, curX));
-    const bottom = Math.min(100, Math.max(dragState.startY, curY));
-    dragState.el.style.left = left + "%";
-    dragState.el.style.top = top + "%";
-    dragState.el.style.width = (right - left) + "%";
-    dragState.el.style.height = (bottom - top) + "%";
-    dragState.resultX = left;
-    dragState.resultY = top;
-    dragState.resultW = right - left;
-    dragState.resultH = bottom - top;
+
+    if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
+      const curViewportX = clientX - rect.left;
+      const curViewportY = clientY - rect.top;
+      const curReal = Render.imageViewer.viewportToReal(curViewportX, curViewportY);
+
+      const leftReal = Math.min(dragState.startRealX, curReal.x);
+      const topReal = Math.min(dragState.startRealY, curReal.y);
+      const rightReal = Math.max(dragState.startRealX, curReal.x);
+      const bottomReal = Math.max(dragState.startRealY, curReal.y);
+
+      const leftViewport = Render.imageViewer.realToViewport(leftReal, topReal);
+      const widthReal = rightReal - leftReal;
+      const heightReal = bottomReal - topReal;
+
+      dragState.el.style.left = leftViewport.x + "px";
+      dragState.el.style.top = leftViewport.y + "px";
+      dragState.el.style.width = widthReal * Render.imageViewer.scale + "px";
+      dragState.el.style.height = heightReal * Render.imageViewer.scale + "px";
+
+      dragState.resultRealX = leftReal;
+      dragState.resultRealY = topReal;
+      dragState.resultRealW = widthReal;
+      dragState.resultRealH = heightReal;
+
+      const percent = Render.imageViewer.realToPercent(leftReal, topReal);
+      dragState.resultX = percent.x;
+      dragState.resultY = percent.y;
+      dragState.resultW = Number(((widthReal / Render.imageViewer.naturalWidth) * 100).toFixed(2));
+      dragState.resultH = Number(((heightReal / Render.imageViewer.naturalHeight) * 100).toFixed(2));
+    } else {
+      const curX = ((clientX - rect.left) / rect.width) * 100;
+      const curY = ((clientY - rect.top) / rect.height) * 100;
+      const left = Math.max(0, Math.min(dragState.startX, curX));
+      const top = Math.max(0, Math.min(dragState.startY, curY));
+      const right = Math.min(100, Math.max(dragState.startX, curX));
+      const bottom = Math.min(100, Math.max(dragState.startY, curY));
+
+      dragState.el.style.left = left + "%";
+      dragState.el.style.top = top + "%";
+      dragState.el.style.width = (right - left) + "%";
+      dragState.el.style.height = (bottom - top) + "%";
+
+      dragState.resultX = left;
+      dragState.resultY = top;
+      dragState.resultW = right - left;
+      dragState.resultH = bottom - top;
+    }
   }
 
   function endDrag() {
@@ -147,16 +246,27 @@
     el.remove();
     dragState = null;
     document.body.classList.remove("dragging-region");
+
     if (resultW >= 1 && resultH >= 1) {
       const selectedTypeId = Render.getSelectedTypeId();
-      const marker = State.addRegion({
+
+      const markerData = {
         typeId: selectedTypeId,
         note: noteInput.value,
         x: Number(resultX.toFixed(2)),
         y: Number(resultY.toFixed(2)),
         width: Number(resultW.toFixed(2)),
         height: Number(resultH.toFixed(2)),
-      });
+      };
+
+      if (dragState.resultRealX !== undefined) {
+        markerData.realX = Number(dragState.resultRealX.toFixed(2));
+        markerData.realY = Number(dragState.resultRealY.toFixed(2));
+        markerData.realWidth = Number(dragState.resultRealW.toFixed(2));
+        markerData.realHeight = Number(dragState.resultRealH.toFixed(2));
+      }
+
+      const marker = State.addRegion(markerData);
       if (marker) {
         noteInput.value = "";
       }
@@ -183,6 +293,28 @@
       return;
     }
     const payload = buildExport(State.all);
+
+    if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
+      const page = State.currentPage;
+      if (page && page.markers.length > 0) {
+        const imageInfo = Render.imageViewer.getImageInfo();
+        payload.viewerInfo = {
+          imageWidth: imageInfo.naturalWidth,
+          imageHeight: imageInfo.naturalHeight,
+          currentPageId: page.id,
+        };
+        if (payload.pages) {
+          const pageData = payload.pages.find((p) => p.id === page.id);
+          if (pageData) {
+            pageData.imageWidth = imageInfo.naturalWidth;
+            pageData.imageHeight = imageInfo.naturalHeight;
+            pageData.markers = page.markers
+              .map((m) => Render.imageViewer.exportRealCoords(m))
+              .filter(Boolean);
+          }
+        }
+      }
+    }
 
     const idPart = sanitizeFilenamePart(payload.volume.id);
     const titlePart = sanitizeFilenamePart(payload.volume.title);
@@ -253,6 +385,19 @@
         State.clearCurrentMarkers();
       }
     }
+
+    if (Render.viewerMode) {
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        if (Render.imageViewer) Render.imageViewer.zoomIn();
+      } else if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        if (Render.imageViewer) Render.imageViewer.zoomOut();
+      } else if (event.key === "0") {
+        event.preventDefault();
+        if (Render.imageViewer) Render.imageViewer.fitToViewport();
+      }
+    }
   }
 
   function bindEvents() {
@@ -264,7 +409,15 @@
       Render.openTypeConfig();
     });
 
-    stage.addEventListener("click", handleStageClick);
+    const { viewerViewport } = Render.Doms;
+    const { stage } = Render.Doms;
+
+    if (viewerViewport) {
+      viewerViewport.addEventListener("click", handleStageClick);
+    }
+    if (stage) {
+      stage.addEventListener("click", handleStageClick);
+    }
 
     modeSwitch.addEventListener("click", (event) => {
       const btn = event.target.closest("[data-mode]");
@@ -272,11 +425,21 @@
       setMode(btn.dataset.mode);
     });
 
-    dragOverlay.addEventListener("mousedown", (event) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      startDrag(event.clientX, event.clientY);
-    });
+    const { dragOverlay } = getActiveElements();
+    if (dragOverlay) {
+      dragOverlay.addEventListener("mousedown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        startDrag(event.clientX, event.clientY);
+      });
+
+      dragOverlay.addEventListener("touchstart", (event) => {
+        if (event.touches.length !== 1) return;
+        event.preventDefault();
+        const touch = event.touches[0];
+        startDrag(touch.clientX, touch.clientY);
+      }, { passive: false });
+    }
 
     document.addEventListener("mousemove", (event) => {
       if (dragState) {
@@ -288,13 +451,6 @@
     document.addEventListener("mouseup", () => {
       if (dragState) endDrag();
     });
-
-    dragOverlay.addEventListener("touchstart", (event) => {
-      if (event.touches.length !== 1) return;
-      event.preventDefault();
-      const touch = event.touches[0];
-      startDrag(touch.clientX, touch.clientY);
-    }, { passive: false });
 
     document.addEventListener("touchmove", (event) => {
       if (!dragState) return;
@@ -323,6 +479,14 @@
       Render.refresh();
     });
 
+    State.subscribe((state) => {
+      setTimeout(() => {
+        if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
+          Render.imageViewer.fitToViewport();
+        }
+      }, 50);
+    });
+
     const dropZone = document.body;
     ;['dragenter', 'dragover'].forEach(evt => {
       dropZone.addEventListener(evt, (e) => {
@@ -345,6 +509,7 @@
     State.init();
     Render.init();
     bindEvents();
+    setMode("point");
   }
 
   if (document.readyState === "loading") {

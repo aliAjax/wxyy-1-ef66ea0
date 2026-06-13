@@ -181,7 +181,7 @@
       return removed;
     },
 
-    addMarker({ typeId, type, note, x, y }) {
+    addMarker({ typeId, type, note, x, y, realX, realY }) {
       const page = this.currentPage;
       if (!page) return null;
       let resolvedTypeId;
@@ -203,6 +203,10 @@
         y: Number(Number(y).toFixed(2)),
         createdAt: new Date().toISOString(),
       };
+      if (realX !== undefined && realY !== undefined) {
+        marker.realX = Number(Number(realX).toFixed(2));
+        marker.realY = Number(Number(realY).toFixed(2));
+      }
       page.markers.push(marker);
       page.updatedAt = marker.createdAt;
       this._persist();
@@ -210,7 +214,7 @@
       return marker;
     },
 
-    addRegion({ typeId, type, note, x, y, width, height }) {
+    addRegion({ typeId, type, note, x, y, width, height, realX, realY, realWidth, realHeight }) {
       const page = this.currentPage;
       if (!page) return null;
       let resolvedTypeId;
@@ -230,10 +234,18 @@
         note: (note || "").trim(),
         x: Number(Number(x).toFixed(2)),
         y: Number(Number(y).toFixed(2)),
-        width: Number(Number(width).toFixed(2)),
-        height: Number(Number(height).toFixed(2)),
+        width: Number(Number(width || 0).toFixed(2)),
+        height: Number(Number(height || 0).toFixed(2)),
         createdAt: new Date().toISOString(),
       };
+      if (realX !== undefined && realY !== undefined) {
+        marker.realX = Number(Number(realX).toFixed(2));
+        marker.realY = Number(Number(realY).toFixed(2));
+      }
+      if (realWidth !== undefined && realHeight !== undefined) {
+        marker.realWidth = Number(Number(realWidth).toFixed(2));
+        marker.realHeight = Number(Number(realHeight).toFixed(2));
+      }
       if (marker.width < 1 || marker.height < 1) return null;
       page.markers.push(marker);
       page.updatedAt = marker.createdAt;

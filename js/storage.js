@@ -99,9 +99,17 @@
       y: Number(Number(m.y).toFixed(2)),
       createdAt: m.createdAt || new Date().toISOString(),
     };
+    if (m.realX !== undefined && m.realY !== undefined) {
+      base.realX = Number(Number(m.realX).toFixed(2));
+      base.realY = Number(Number(m.realY).toFixed(2));
+    }
     if (mode === "region") {
       base.width = Number(Number(m.width || 0).toFixed(2));
       base.height = Number(Number(m.height || 0).toFixed(2));
+      if (m.realWidth !== undefined && m.realHeight !== undefined) {
+        base.realWidth = Number(Number(m.realWidth).toFixed(2));
+        base.realHeight = Number(Number(m.realHeight).toFixed(2));
+      }
     }
     return base;
   }
@@ -216,17 +224,24 @@
       const damageTypes = state.damageTypes || structuredClone(DEFAULT_DAMAGE_TYPES);
       const typeMap = Object.fromEntries(damageTypes.map((t) => [t.id, t]));
 
-      const pages = state.pages.map((p) => ({
-        id: p.id,
-        name: p.name,
-        fileName: p.fileName,
-        imageIncluded: Boolean(p.image),
-        markers: p.markers
-          .map((m) => normalizeMarker(m, damageTypes))
-          .filter(Boolean),
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-      }));
+      const pages = state.pages.map((p) => {
+        const pageData = {
+          id: p.id,
+          name: p.name,
+          fileName: p.fileName,
+          imageIncluded: Boolean(p.image),
+          markers: p.markers
+            .map((m) => normalizeMarker(m, damageTypes))
+            .filter(Boolean),
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        };
+        if (p.imageWidth !== undefined && p.imageHeight !== undefined) {
+          pageData.imageWidth = p.imageWidth;
+          pageData.imageHeight = p.imageHeight;
+        }
+        return pageData;
+      });
 
       const totalMarkers = pages.reduce(
         (acc, p) => acc + p.markers.length,
@@ -245,9 +260,13 @@
         })
       );
 
-      return {
+      const hasRealCoords = pages.some((p) =>
+        p.markers.some((m) => m.realX !== undefined)
+      );
+
+      const result = {
         format: "archive-volume-damage",
-        formatVersion: "2.0",
+        formatVersion: "2.1",
         exportedAt: new Date().toISOString(),
         damageTypes,
         volume: {
@@ -261,6 +280,13 @@
         },
         pages,
       };
+
+      if (hasRealCoords) {
+        result.coordSystem = "dual";
+        result.coordNote = "同时包含百分比坐标(x,y)和真实像素坐标(realX,realY)";
+      }
+
+      return result;
     },
 
     createPage: createPageFromImage,
