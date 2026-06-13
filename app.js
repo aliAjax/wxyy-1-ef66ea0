@@ -944,7 +944,7 @@
       : 50;
 
     const options = {
-      sensitivity: sensitivity / 100,
+      sensitivity: sensitivity,
       detectEdgeDamage: detectEdge,
       maxCandidates: maxCandidates,
     };
