@@ -27,6 +27,9 @@
     this.panStartY = 0;
     this.panStartOffsetX = 0;
     this.panStartOffsetY = 0;
+    this._panMoved = false;
+    this._panThreshold = 5;
+    this._suppressNextClick = false;
 
     this.isRegionDrawing = false;
 
@@ -196,6 +199,8 @@
 
     e.preventDefault();
     this.isPanning = true;
+    this._panMoved = false;
+    this._suppressNextClick = false;
     this.panStartX = e.clientX;
     this.panStartY = e.clientY;
     this.panStartOffsetX = this.offsetX;
@@ -208,6 +213,9 @@
       e.preventDefault();
       const dx = e.clientX - this.panStartX;
       const dy = e.clientY - this.panStartY;
+      if (!this._panMoved && (Math.abs(dx) > this._panThreshold || Math.abs(dy) > this._panThreshold)) {
+        this._panMoved = true;
+      }
       this.panTo(this.panStartOffsetX + dx, this.panStartOffsetY + dy);
     }
   };
@@ -215,8 +223,19 @@
   ImageViewer.prototype._handleMouseUp = function (e) {
     if (this.isPanning) {
       this.isPanning = false;
+      if (this._panMoved) {
+        this._suppressNextClick = true;
+      }
       this.viewport.style.cursor = "";
     }
+  };
+
+  ImageViewer.prototype.checkAndClearPanClick = function () {
+    if (this._suppressNextClick) {
+      this._suppressNextClick = false;
+      return true;
+    }
+    return false;
   };
 
   ImageViewer.prototype._handleTouchStart = function (e) {
@@ -229,6 +248,8 @@
 
       e.preventDefault();
       this.isPanning = true;
+      this._panMoved = false;
+      this._suppressNextClick = false;
       this.panStartX = touch.clientX;
       this.panStartY = touch.clientY;
       this.panStartOffsetX = this.offsetX;
@@ -242,6 +263,9 @@
       const touch = e.touches[0];
       const dx = touch.clientX - this.panStartX;
       const dy = touch.clientY - this.panStartY;
+      if (!this._panMoved && (Math.abs(dx) > this._panThreshold || Math.abs(dy) > this._panThreshold)) {
+        this._panMoved = true;
+      }
       this.panTo(this.panStartOffsetX + dx, this.panStartOffsetY + dy);
     }
   };
@@ -249,6 +273,9 @@
   ImageViewer.prototype._handleTouchEnd = function (e) {
     if (this.isPanning) {
       this.isPanning = false;
+      if (this._panMoved) {
+        this._suppressNextClick = true;
+      }
     }
   };
 
@@ -418,8 +445,6 @@
       realY = real.y;
     }
 
-    const viewport = this.realToViewport(realX, realY);
-
     if (marker.mode === "region") {
       if (marker.realWidth !== undefined && marker.realHeight !== undefined) {
         realW = marker.realWidth;
@@ -429,16 +454,16 @@
         realH = (marker.height / 100) * this.naturalHeight;
       }
       return {
-        left: viewport.x + "px",
-        top: viewport.y + "px",
-        width: realW * this.scale + "px",
-        height: realH * this.scale + "px",
+        left: realX + "px",
+        top: realY + "px",
+        width: realW + "px",
+        height: realH + "px",
       };
     }
 
     return {
-      left: viewport.x + "px",
-      top: viewport.y + "px",
+      left: realX + "px",
+      top: realY + "px",
     };
   };
 

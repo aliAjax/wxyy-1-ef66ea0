@@ -93,12 +93,11 @@
   }
 
   function computeCoords(clientX, clientY) {
-    const { dragOverlay } = getActiveElements();
-    const rect = dragOverlay.getBoundingClientRect();
-
     if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
-      const viewportX = clientX - rect.left;
-      const viewportY = clientY - rect.top;
+      const viewportEl = Render.Doms.viewerViewport;
+      const viewportRect = viewportEl.getBoundingClientRect();
+      const viewportX = clientX - viewportRect.left;
+      const viewportY = clientY - viewportRect.top;
       const real = Render.imageViewer.viewportToReal(viewportX, viewportY);
       const percent = Render.imageViewer.realToPercent(real.x, real.y);
       return {
@@ -109,6 +108,8 @@
       };
     }
 
+    const { dragOverlay } = getActiveElements();
+    const rect = dragOverlay.getBoundingClientRect();
     const x = ((clientX - rect.left) / rect.width) * 100;
     const y = ((clientY - rect.top) / rect.height) * 100;
     return {
@@ -124,7 +125,7 @@
     const page = State.currentPage;
     if (!page || !page.image) return;
 
-    if (Render.viewerMode && Render.imageViewer && Render.imageViewer.isPanning) {
+    if (Render.viewerMode && Render.imageViewer && Render.imageViewer.checkAndClearPanClick()) {
       return;
     }
 
@@ -155,7 +156,6 @@
     if (!page || !page.image) return;
 
     const { dragOverlay } = getActiveElements();
-    const rect = dragOverlay.getBoundingClientRect();
     const el = document.createElement("div");
     el.className = "drag-rect";
     dragOverlay.appendChild(el);
@@ -164,22 +164,25 @@
       el,
       clientStartX: clientX,
       clientStartY: clientY,
-      rect,
     };
 
     if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
-      const startViewportX = clientX - rect.left;
-      const startViewportY = clientY - rect.top;
+      const viewportEl = Render.Doms.viewerViewport;
+      const viewportRect = viewportEl.getBoundingClientRect();
+      const startViewportX = clientX - viewportRect.left;
+      const startViewportY = clientY - viewportRect.top;
       const real = Render.imageViewer.viewportToReal(startViewportX, startViewportY);
       dragState.startRealX = real.x;
       dragState.startRealY = real.y;
       el.style.position = "absolute";
       el.style.pointerEvents = "none";
     } else {
+      const rect = dragOverlay.getBoundingClientRect();
       const startX = ((clientX - rect.left) / rect.width) * 100;
       const startY = ((clientY - rect.top) / rect.height) * 100;
       dragState.startX = startX;
       dragState.startY = startY;
+      dragState.rect = rect;
     }
 
     document.body.classList.add("dragging-region");
@@ -188,27 +191,24 @@
   function moveDrag(clientX, clientY) {
     if (!dragState) return;
 
-    const { dragOverlay } = getActiveElements();
-    const rect = dragOverlay.getBoundingClientRect();
-
     if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
-      const curViewportX = clientX - rect.left;
-      const curViewportY = clientY - rect.top;
+      const viewportEl = Render.Doms.viewerViewport;
+      const viewportRect = viewportEl.getBoundingClientRect();
+      const curViewportX = clientX - viewportRect.left;
+      const curViewportY = clientY - viewportRect.top;
       const curReal = Render.imageViewer.viewportToReal(curViewportX, curViewportY);
 
       const leftReal = Math.min(dragState.startRealX, curReal.x);
       const topReal = Math.min(dragState.startRealY, curReal.y);
       const rightReal = Math.max(dragState.startRealX, curReal.x);
       const bottomReal = Math.max(dragState.startRealY, curReal.y);
-
-      const leftViewport = Render.imageViewer.realToViewport(leftReal, topReal);
       const widthReal = rightReal - leftReal;
       const heightReal = bottomReal - topReal;
 
-      dragState.el.style.left = leftViewport.x + "px";
-      dragState.el.style.top = leftViewport.y + "px";
-      dragState.el.style.width = widthReal * Render.imageViewer.scale + "px";
-      dragState.el.style.height = heightReal * Render.imageViewer.scale + "px";
+      dragState.el.style.left = leftReal + "px";
+      dragState.el.style.top = topReal + "px";
+      dragState.el.style.width = widthReal + "px";
+      dragState.el.style.height = heightReal + "px";
 
       dragState.resultRealX = leftReal;
       dragState.resultRealY = topReal;
@@ -221,6 +221,8 @@
       dragState.resultW = Number(((widthReal / Render.imageViewer.naturalWidth) * 100).toFixed(2));
       dragState.resultH = Number(((heightReal / Render.imageViewer.naturalHeight) * 100).toFixed(2));
     } else {
+      const { dragOverlay } = getActiveElements();
+      const rect = dragOverlay.getBoundingClientRect();
       const curX = ((clientX - rect.left) / rect.width) * 100;
       const curY = ((clientY - rect.top) / rect.height) * 100;
       const left = Math.max(0, Math.min(dragState.startX, curX));
@@ -242,34 +244,55 @@
 
   function endDrag() {
     if (!dragState) return;
-    const { resultX, resultY, resultW, resultH, el } = dragState;
-    el.remove();
+
+    const hasReal = dragState.resultRealX !== undefined &&
+                    dragState.resultRealY !== undefined &&
+                    dragState.resultRealW !== undefined &&
+                    dragState.resultRealH !== undefined;
+
+    const el = dragState.el;
+    if (el && el.parentNode) el.remove();
+
+    let savedX = 0, savedY = 0, savedW = 0, savedH = 0;
+    let savedRealX, savedRealY, savedRealW, savedRealH;
+
+    if (dragState.resultX !== undefined) savedX = dragState.resultX;
+    if (dragState.resultY !== undefined) savedY = dragState.resultY;
+    if (dragState.resultW !== undefined) savedW = dragState.resultW;
+    if (dragState.resultH !== undefined) savedH = dragState.resultH;
+    if (hasReal) {
+      savedRealX = dragState.resultRealX;
+      savedRealY = dragState.resultRealY;
+      savedRealW = dragState.resultRealW;
+      savedRealH = dragState.resultRealH;
+    }
+
     dragState = null;
     document.body.classList.remove("dragging-region");
 
-    if (resultW >= 1 && resultH >= 1) {
-      const selectedTypeId = Render.getSelectedTypeId();
+    if (savedW < 1 || savedH < 1) return;
 
-      const markerData = {
-        typeId: selectedTypeId,
-        note: noteInput.value,
-        x: Number(resultX.toFixed(2)),
-        y: Number(resultY.toFixed(2)),
-        width: Number(resultW.toFixed(2)),
-        height: Number(resultH.toFixed(2)),
-      };
+    const selectedTypeId = Render.getSelectedTypeId();
 
-      if (dragState.resultRealX !== undefined) {
-        markerData.realX = Number(dragState.resultRealX.toFixed(2));
-        markerData.realY = Number(dragState.resultRealY.toFixed(2));
-        markerData.realWidth = Number(dragState.resultRealW.toFixed(2));
-        markerData.realHeight = Number(dragState.resultRealH.toFixed(2));
-      }
+    const markerData = {
+      typeId: selectedTypeId,
+      note: noteInput.value,
+      x: Number(savedX.toFixed(2)),
+      y: Number(savedY.toFixed(2)),
+      width: Number(savedW.toFixed(2)),
+      height: Number(savedH.toFixed(2)),
+    };
 
-      const marker = State.addRegion(markerData);
-      if (marker) {
-        noteInput.value = "";
-      }
+    if (hasReal) {
+      markerData.realX = Number(savedRealX.toFixed(2));
+      markerData.realY = Number(savedRealY.toFixed(2));
+      markerData.realWidth = Number(savedRealW.toFixed(2));
+      markerData.realHeight = Number(savedRealH.toFixed(2));
+    }
+
+    const marker = State.addRegion(markerData);
+    if (marker) {
+      noteInput.value = "";
     }
   }
 
@@ -425,8 +448,8 @@
       setMode(btn.dataset.mode);
     });
 
-    const { dragOverlay } = getActiveElements();
-    if (dragOverlay) {
+    function bindDragEvents(dragOverlay) {
+      if (!dragOverlay) return;
       dragOverlay.addEventListener("mousedown", (event) => {
         if (event.button !== 0) return;
         event.preventDefault();
@@ -440,6 +463,9 @@
         startDrag(touch.clientX, touch.clientY);
       }, { passive: false });
     }
+
+    bindDragEvents(Render.Doms.dragOverlay);
+    bindDragEvents(Render.Doms.dragOverlaySimple);
 
     document.addEventListener("mousemove", (event) => {
       if (dragState) {

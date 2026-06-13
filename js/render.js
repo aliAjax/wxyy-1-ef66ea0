@@ -192,6 +192,15 @@
     }
 
     renderCanvas();
+
+    if (enabled && imageViewer) {
+      const modeSwitch = document.getElementById("modeSwitch");
+      if (modeSwitch) {
+        const activeBtn = modeSwitch.querySelector(".mode-btn.active");
+        const mode = activeBtn ? activeBtn.dataset.mode : "point";
+        imageViewer.setRegionDrawingMode(mode === "region");
+      }
+    }
   }
 
   function toggleViewerMode() {
