@@ -8,6 +8,7 @@
   const noteInput = document.getElementById("noteInput");
   const configBtn = document.getElementById("configBtn");
   const reviewBtn = document.getElementById("reviewBtn");
+  const diffBtn = document.getElementById("diffBtn");
   const exportBtn = document.getElementById("exportBtn");
   const importBtn = document.getElementById("importBtn");
   const importFileInput = document.getElementById("importFileInput");
@@ -843,6 +844,10 @@
     window.location.href = "./review.html";
   }
 
+  function handleGoDiff() {
+    window.location.href = "./diff.html";
+  }
+
   function handleClearAll() {
     if (!State.hasPages) {
       showToast("当前没有卷册数据", "warning");
@@ -968,6 +973,7 @@
     });
 
     reviewBtn.addEventListener("click", handleGoReview);
+    diffBtn.addEventListener("click", handleGoDiff);
     exportBtn.addEventListener("click", handleExport);
     importBtn.addEventListener("click", function () {
       openImportModal();

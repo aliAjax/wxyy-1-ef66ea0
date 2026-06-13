@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>双人标注差异比对 · 古籍损伤标注</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="diff-app">
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Dual Annotator Comparison</p>
+        <h1>双人标注差异比对</h1>
+      </div>
+      <div class="actions">
+        <button id="backBtn" type="button">← 返回标注</button>
+        <button id="clearDiffBtn" type="button">清空比对</button>
+        <button id="exportMergedBtn" type="button" class="primary" disabled>📦 导出合并结果</button>
+      </div>
+    </header>
+
+    <section class="diff-workspace">
+      <aside class="panel diff-import-panel">
+        <h2>导入标注结果</h2>
+
+        <div class="import-group">
+          <h3>标注员 A</h3>
+          <div class="diff-drop-zone" id="dropZoneA">
+            <div class="diff-drop-icon">📄</div>
+            <div class="diff-drop-text">拖入 A 的标注文件</div>
+            <div class="diff-drop-hint">或 <button type="button" id="browseBtnA">点击选择</button></div>
+            <input type="file" id="fileInputA" accept=".json" style="display:none;" />
+          </div>
+          <div class="file-info" id="fileInfoA" style="display:none;"></div>
+        </div>
+
+        <div class="import-group">
+          <h3>标注员 B</h3>
+          <div class="diff-drop-zone" id="dropZoneB">
+            <div class="diff-drop-icon">📄</div>
+            <div class="diff-drop-text">拖入 B 的标注文件</div>
+            <div class="diff-drop-hint">或 <button type="button" id="browseBtnB">点击选择</button></div>
+            <input type="file" id="fileInputB" accept=".json" style="display:none;" />
+          </div>
+          <div class="file-info" id="fileInfoB" style="display:none;"></div>
+        </div>
+
+        <div class="diff-settings">
+          <h3>比对设置</h3>
+          <label>
+            <span>坐标匹配阈值 (%)</span>
+            <div class="threshold-control">
+              <input type="range" id="thresholdSlider" min="0.5" max="10" step="0.1" value="3.0" />
+              <input type="number" id="thresholdInput" min="0.5" max="10" step="0.1" value="3.0" />
+            </div>
+            <p class="setting-hint">两点中心距离小于此值视为同一处损伤</p>
+          </label>
+
+          <label class="checkbox-label">
+            <input type="checkbox" id="compareType" checked />
+            <span>检查损伤类型一致性</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input type="checkbox" id="compareNote" checked />
+            <span>检查备注一致性</span>
+          </label>
+        </div>
+
+        <button id="compareBtn" type="button" class="primary compare-btn" disabled>开始比对</button>
+      </aside>
+
+      <section class="diff-canvas-panel">
+        <div class="diff-stats" id="diffStats" style="display:none;">
+          <div class="stat-card match">
+            <span class="stat-label">匹配</span>
+            <span class="stat-value" id="statMatch">0</span>
+          </div>
+          <div class="stat-card only-a">
+            <span class="stat-label">仅 A 有</span>
+            <span class="stat-value" id="statOnlyA">0</span>
+          </div>
+          <div class="stat-card only-b">
+            <span class="stat-label">仅 B 有</span>
+            <span class="stat-value" id="statOnlyB">0</span>
+          </div>
+          <div class="stat-card type-mismatch">
+            <span class="stat-label">类型不一致</span>
+            <span class="stat-value" id="statType">0</span>
+          </div>
+          <div class="stat-card note-mismatch">
+            <span class="stat-label">备注不一致</span>
+            <span class="stat-value" id="statNote">0</span>
+          </div>
+          <div class="stat-card consistency">
+            <span class="stat-label">一致率</span>
+            <span class="stat-value" id="statConsistency">0%</span>
+          </div>
+        </div>
+
+        <div class="diff-canvas-container">
+          <div class="diff-layer-controls">
+            <label class="checkbox-label">
+              <input type="checkbox" id="showLayerA" checked />
+              <span class="layer-indicator layer-a"></span>
+              <span>显示 A 标注</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="showLayerB" checked />
+              <span class="layer-indicator layer-b"></span>
+              <span>显示 B 标注</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="showMatch" checked />
+              <span class="layer-indicator layer-match"></span>
+              <span>显示匹配</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="showDiff" checked />
+              <span class="layer-indicator layer-diff"></span>
+              <span>显示差异</span>
+            </label>
+          </div>
+
+          <div class="diff-canvas" id="diffCanvas">
+            <div class="diff-empty" id="diffEmpty">
+              <div class="diff-empty-icon">📑</div>
+              <p>请导入两份标注结果后开始比对</p>
+            </div>
+            <img id="diffImage" alt="古籍扫描页" style="display:none;" />
+            <div id="diffMarkersLayer" class="diff-markers"></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel diff-list-panel">
+        <div class="diff-list-header">
+          <h2>差异列表</h2>
+          <div class="diff-filter-tabs" id="diffFilterTabs">
+            <button type="button" class="filter-tab active" data-filter="all">全部</button>
+            <button type="button" class="filter-tab" data-filter="match">匹配</button>
+            <button type="button" class="filter-tab" data-filter="only_a">仅 A</button>
+            <button type="button" class="filter-tab" data-filter="only_b">仅 B</button>
+            <button type="button" class="filter-tab" data-filter="type_mismatch">类型</button>
+            <button type="button" class="filter-tab" data-filter="note_mismatch">备注</button>
+          </div>
+        </div>
+        <div id="diffList" class="diff-list"></div>
+
+        <div class="merge-settings" id="mergeSettings" style="display:none;">
+          <h3>合并设置</h3>
+          <label>
+            <span>冲突时优先</span>
+            <select id="mergePrefer">
+              <option value="a">标注员 A</option>
+              <option value="b">标注员 B</option>
+            </select>
+          </label>
+          <label>
+            <span>合并策略</span>
+            <select id="mergeStrategy">
+              <option value="combine">合并备注</option>
+              <option value="keep_conflict">保留冲突待处理</option>
+            </select>
+          </label>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="./js/diff-compare.js"></script>
+  <script src="./js/diff-app.js"></script>
+</body>
+</html>
