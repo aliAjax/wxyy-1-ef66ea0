@@ -13,6 +13,8 @@
     emptyStateSimple: null,
     markersLayer: null,
     markersLayerSimple: null,
+    candidateLayer: null,
+    candidateLayerSimple: null,
     typeInput: null,
     stats: null,
     statsTotal: null,
@@ -52,6 +54,20 @@
     confirmDeleteTypeBtn: null,
     deleteTypeMsg: null,
     migrateTypeTarget: null,
+    candidateSensitivity: null,
+    sensitivityValue: null,
+    detectEdgeDamage: null,
+    maxCandidatesSelect: null,
+    runDetectBtn: null,
+    candPending: null,
+    candAccepted: null,
+    candIgnored: null,
+    acceptAllBtn: null,
+    ignoreAllBtn: null,
+    applyAcceptedBtn: null,
+    candidateList: null,
+    candidateFilterTabs: null,
+    candidateToggleBtn: null,
   };
 
   let viewerMode = false;
@@ -69,6 +85,8 @@
     Doms.emptyStateSimple = document.getElementById("emptyStateSimple");
     Doms.markersLayer = document.getElementById("markers");
     Doms.markersLayerSimple = document.getElementById("markersSimple");
+    Doms.candidateLayer = document.getElementById("candidateLayer");
+    Doms.candidateLayerSimple = document.getElementById("candidateLayerSimple");
     Doms.typeInput = document.getElementById("typeInput");
     Doms.stats = document.getElementById("stats");
     Doms.statsTotal = document.getElementById("statsTotal");
@@ -108,6 +126,20 @@
     Doms.confirmDeleteTypeBtn = document.getElementById("confirmDeleteTypeBtn");
     Doms.deleteTypeMsg = document.getElementById("deleteTypeMsg");
     Doms.migrateTypeTarget = document.getElementById("migrateTypeTarget");
+    Doms.candidateSensitivity = document.getElementById("candidateSensitivity");
+    Doms.sensitivityValue = document.getElementById("sensitivityValue");
+    Doms.detectEdgeDamage = document.getElementById("detectEdgeDamage");
+    Doms.maxCandidatesSelect = document.getElementById("maxCandidatesSelect");
+    Doms.runDetectBtn = document.getElementById("runDetectBtn");
+    Doms.candPending = document.getElementById("candPending");
+    Doms.candAccepted = document.getElementById("candAccepted");
+    Doms.candIgnored = document.getElementById("candIgnored");
+    Doms.acceptAllBtn = document.getElementById("acceptAllBtn");
+    Doms.ignoreAllBtn = document.getElementById("ignoreAllBtn");
+    Doms.applyAcceptedBtn = document.getElementById("applyAcceptedBtn");
+    Doms.candidateList = document.getElementById("candidateList");
+    Doms.candidateFilterTabs = document.getElementById("candidateFilterTabs");
+    Doms.candidateToggleBtn = document.getElementById("candidateToggleBtn");
   }
 
   function escapeHtml(str) {
@@ -288,6 +320,7 @@
         image: Doms.pageImage,
         emptyState: Doms.emptyState,
         markersLayer: Doms.markersLayer,
+        candidateLayer: Doms.candidateLayer,
         dragOverlay: Doms.dragOverlay,
       };
     }
@@ -295,6 +328,7 @@
       image: Doms.pageImageSimple,
       emptyState: Doms.emptyStateSimple,
       markersLayer: Doms.markersLayerSimple,
+      candidateLayer: Doms.candidateLayerSimple,
       dragOverlay: Doms.dragOverlaySimple,
     };
   }
@@ -363,6 +397,164 @@
         })
         .join("");
     }
+  }
+
+  function renderCandidates() {
+    const page = State.currentPage;
+    const { candidateLayer } = getActiveStageElements();
+
+    if (!page || !page.image || !candidateLayer) return;
+
+    const candidates = window.CandidateManager
+      ? window.CandidateManager.getCandidates()
+      : [];
+    const filter = window.CandidateManager
+      ? window.CandidateManager.getFilter()
+      : "all";
+
+    const filteredCandidates =
+      filter === "all"
+        ? candidates
+        : candidates.filter((c) => c.status === filter);
+
+    if (filteredCandidates.length === 0) {
+      candidateLayer.innerHTML = "";
+      return;
+    }
+
+    if (viewerMode && imageViewer && imageViewer.imageLoaded) {
+      candidateLayer.innerHTML = filteredCandidates
+        .map((c) => {
+          const style = imageViewer.getMarkerStageStyle({
+            mode: c.mode || "point",
+            x: c.x,
+            y: c.y,
+            width: c.width,
+            height: c.height,
+          });
+          return renderCandidateHtml(c, style);
+        })
+        .join("");
+    } else {
+      candidateLayer.innerHTML = filteredCandidates
+        .map((c) => {
+          if (c.mode === "region") {
+            return renderCandidateHtml(c, {
+              left: c.x + "%",
+              top: c.y + "%",
+              width: c.width + "%",
+              height: c.height + "%",
+            });
+          }
+          return renderCandidateHtml(c, {
+            left: c.x + "%",
+            top: c.y + "%",
+          });
+        })
+        .join("");
+    }
+  }
+
+  function renderCandidateHtml(candidate, style) {
+    const status = candidate.status || "pending";
+    const isPoint = candidate.mode === "point";
+    const styleStr = Object.keys(style)
+      .map((k) => `${k}:${style[k]}`)
+      .join(";");
+    const label =
+      candidate.type === "hole"
+        ? "疑似孔"
+        : candidate.type === "spot"
+          ? "深色斑"
+          : candidate.type === "edge"
+            ? "边缘损"
+            : "可疑";
+    return `
+      <div class="candidate-marker ${status} ${isPoint ? "point" : ""}"
+           data-candidate-id="${candidate.id}"
+           style="${styleStr}">
+        ${!isPoint ? `<span class="cand-badge">${label}</span>` : ""}
+      </div>
+    `;
+  }
+
+  function renderCandidateList() {
+    if (!Doms.candidateList) return;
+
+    const candidates = window.CandidateManager
+      ? window.CandidateManager.getCandidates()
+      : [];
+    const filter = window.CandidateManager
+      ? window.CandidateManager.getFilter()
+      : "all";
+
+    const filteredCandidates =
+      filter === "all"
+        ? candidates
+        : candidates.filter((c) => c.status === filter);
+
+    if (candidates.length === 0) {
+      Doms.candidateList.innerHTML =
+        '<div class="candidate-empty">点击「开始检测」识别疑似虫蛀区域</div>';
+      return;
+    }
+
+    if (filteredCandidates.length === 0) {
+      const label =
+        filter === "pending" ? "待处理" : filter === "accepted" ? "已接受" : "已忽略";
+      Doms.candidateList.innerHTML = `<div class="candidate-empty">暂无${label}候选</div>`;
+      return;
+    }
+
+    Doms.candidateList.innerHTML = filteredCandidates
+      .map((c, i) => {
+        const status = c.status || "pending";
+        const typeLabel =
+          c.type === "hole"
+            ? "疑似破洞"
+            : c.type === "spot"
+              ? "深色斑点"
+              : c.type === "edge"
+                ? "边缘破损"
+                : "可疑损伤";
+        const conf = Math.round((c.confidence || 0.5) * 100) + "%";
+        const sizeInfo = c.width
+          ? `${Math.round(c.width * 10) / 10}% × ${Math.round(c.height * 10) / 10}%`
+          : "点状";
+        return `
+          <div class="candidate-item ${status}" data-candidate-id="${c.id}">
+            <span class="cand-item-indicator ${status}"></span>
+            <div class="cand-item-body">
+              <div class="cand-item-title">${i + 1}. ${typeLabel}</div>
+              <div class="cand-item-meta">
+                <span>置信度: <span class="cand-item-confidence">${conf}</span></span>
+                <span>${sizeInfo}</span>
+              </div>
+            </div>
+            <div class="cand-item-actions">
+              ${status === "pending" ? `
+                <button class="cand-action-btn accept" data-action="accept" title="接受">✓</button>
+                <button class="cand-action-btn ignore" data-action="ignore" title="忽略">✗</button>
+              ` : `
+                <button class="cand-action-btn reset" data-action="reset" title="重置">↺</button>
+              `}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function updateCandidateStats() {
+    if (!Doms.candPending || !Doms.candAccepted || !Doms.candIgnored) return;
+
+    const stats = window.CandidateManager
+      ? window.CandidateManager.getStats()
+      : { pending: 0, accepted: 0, ignored: 0 };
+
+    Doms.candPending.textContent = stats.pending;
+    Doms.candAccepted.textContent = stats.accepted;
+    Doms.candIgnored.textContent = stats.ignored;
   }
 
   function renderCanvas() {
@@ -587,6 +779,9 @@
     renderCanvas();
     renderStats();
     renderMarkerList();
+    renderCandidates();
+    renderCandidateList();
+    updateCandidateStats();
     renderPageNav();
     if (
       Doms.typeConfigModal &&

@@ -3,6 +3,8 @@
   const State = window.VolumeState;
   const Render = window.VolumeRender;
   const Package = window.ProjectPackage;
+  const CandidateDetector = window.CandidateDetector;
+  const CandidateManager = window.CandidateManager;
 
   const imageInput = document.getElementById("imageInput");
   const noteInput = document.getElementById("noteInput");
@@ -15,6 +17,17 @@
   const clearBtn = document.getElementById("clearBtn");
   const clearAllBtn = document.getElementById("clearAllBtn");
   const modeSwitch = document.getElementById("modeSwitch");
+
+  const candidateSensitivity = document.getElementById("candidateSensitivity");
+  const sensitivityValue = document.getElementById("sensitivityValue");
+  const detectEdgeDamage = document.getElementById("detectEdgeDamage");
+  const maxCandidatesSelect = document.getElementById("maxCandidatesSelect");
+  const runDetectBtn = document.getElementById("runDetectBtn");
+  const acceptAllBtn = document.getElementById("acceptAllBtn");
+  const ignoreAllBtn = document.getElementById("ignoreAllBtn");
+  const applyAcceptedBtn = document.getElementById("applyAcceptedBtn");
+  const candidateList = document.getElementById("candidateList");
+  const candidateFilterTabs = document.getElementById("candidateFilterTabs");
 
   const importModal = document.getElementById("importModal");
   const importError = document.getElementById("importError");
@@ -49,6 +62,8 @@
   let currentMode = "point";
   let dragState = null;
   let pendingImportData = null;
+  let candidatesVisible = true;
+  let lastPageId = null;
 
   var toastContainer = document.getElementById("toastContainer");
 
@@ -902,6 +917,229 @@
     }
   }
 
+  function updateSensitivityDisplay() {
+    if (candidateSensitivity && sensitivityValue) {
+      sensitivityValue.textContent = candidateSensitivity.value;
+    }
+  }
+
+  async function runCandidateDetection() {
+    const page = State.currentPage;
+    if (!page || !page.image) {
+      showToast("请先上传扫描页图片", "warning");
+      return;
+    }
+
+    if (!CandidateDetector || !CandidateManager) {
+      showToast("候选检测模块未加载", "error");
+      return;
+    }
+
+    const sensitivity = candidateSensitivity
+      ? parseInt(candidateSensitivity.value, 10)
+      : 50;
+    const detectEdge = detectEdgeDamage ? detectEdgeDamage.checked : true;
+    const maxCandidates = maxCandidatesSelect
+      ? parseInt(maxCandidatesSelect.value, 10)
+      : 50;
+
+    const options = {
+      sensitivity: sensitivity / 100,
+      detectEdgeDamage: detectEdge,
+      maxCandidates: maxCandidates,
+    };
+
+    runDetectBtn.disabled = true;
+    runDetectBtn.textContent = "检测中...";
+
+    try {
+      const result = await CandidateDetector.detectCandidates(
+        page.image,
+        options
+      );
+
+      if (result.warning) {
+        showToast(result.warning, "warning");
+      }
+
+      CandidateManager.setCandidates(result.candidates || []);
+
+      const count = (result.candidates || []).length;
+      if (count > 0) {
+        showToast(`检测完成，发现 ${count} 个疑似区域`, "success");
+      } else {
+        showToast("检测完成，未发现疑似虫蛀区域", "info");
+      }
+
+      Render.refresh();
+    } catch (e) {
+      console.error("候选检测失败", e);
+      showToast("检测失败：" + (e.message || "未知错误"), "error");
+    } finally {
+      runDetectBtn.disabled = false;
+      runDetectBtn.textContent = "开始检测";
+    }
+  }
+
+  function acceptAllPendingCandidates() {
+    if (!CandidateManager) return;
+    const count = CandidateManager.acceptAllPending();
+    if (count > 0) {
+      showToast(`已接受 ${count} 个候选`, "success");
+      Render.refresh();
+    } else {
+      showToast("没有待处理的候选", "info");
+    }
+  }
+
+  function ignoreAllPendingCandidates() {
+    if (!CandidateManager) return;
+    const count = CandidateManager.ignoreAllPending();
+    if (count > 0) {
+      showToast(`已忽略 ${count} 个候选`, "info");
+      Render.refresh();
+    } else {
+      showToast("没有待处理的候选", "info");
+    }
+  }
+
+  function applyAcceptedCandidates() {
+    if (!CandidateManager) return;
+
+    const page = State.currentPage;
+    if (!page) {
+      showToast("没有当前页面", "warning");
+      return;
+    }
+
+    const acceptedMarkers = CandidateManager.getAcceptedMarkers();
+    if (acceptedMarkers.length === 0) {
+      showToast("没有已接受的候选可应用", "warning");
+      return;
+    }
+
+    const selectedTypeId = Render.getSelectedTypeId();
+
+    let addedCount = 0;
+    for (const markerData of acceptedMarkers) {
+      const finalMarker = {
+        ...markerData,
+        typeId: selectedTypeId || markerData.typeId,
+      };
+      const result =
+        finalMarker.mode === "region"
+          ? State.addRegion(finalMarker)
+          : State.addMarker(finalMarker);
+      if (result) addedCount++;
+    }
+
+    if (addedCount > 0) {
+      showToast(`已添加 ${addedCount} 条损伤记录`, "success");
+      CandidateManager.clearAccepted();
+      Render.refresh();
+    } else {
+      showToast("未能添加任何损伤记录", "warning");
+    }
+  }
+
+  function handleCandidateAction(candidateId, action) {
+    if (!CandidateManager) return;
+
+    switch (action) {
+      case "accept":
+        CandidateManager.acceptCandidate(candidateId);
+        break;
+      case "ignore":
+        CandidateManager.ignoreCandidate(candidateId);
+        break;
+      case "reset":
+        CandidateManager.resetCandidate(candidateId);
+        break;
+    }
+
+    Render.refresh();
+  }
+
+  function setCandidateFilter(filter) {
+    if (!CandidateManager) return;
+    CandidateManager.setFilter(filter);
+
+    if (candidateFilterTabs) {
+      const tabs = candidateFilterTabs.querySelectorAll(".cand-filter-tab");
+      tabs.forEach((tab) => {
+        tab.classList.toggle("active", tab.dataset.filter === filter);
+      });
+    }
+
+    Render.refresh();
+  }
+
+  function handleCandidateListClick(e) {
+    const actionBtn = e.target.closest("[data-action]");
+    if (actionBtn) {
+      e.stopPropagation();
+      const item = e.target.closest("[data-candidate-id]");
+      if (item) {
+        const candidateId = item.dataset.candidateId;
+        const action = actionBtn.dataset.action;
+        handleCandidateAction(candidateId, action);
+      }
+      return;
+    }
+
+    const item = e.target.closest("[data-candidate-id]");
+    if (item) {
+      const candidateId = item.dataset.candidateId;
+      highlightCandidate(candidateId);
+    }
+  }
+
+  function highlightCandidate(candidateId) {
+    const { candidateLayer } = Render.getActiveStageElements();
+    if (!candidateLayer) return;
+
+    const marker = candidateLayer.querySelector(
+      `[data-candidate-id="${candidateId}"]`
+    );
+    if (marker) {
+      marker.style.transform = "scale(1.1)";
+      marker.style.zIndex = "30";
+      setTimeout(() => {
+        marker.style.transform = "";
+        marker.style.zIndex = "";
+      }, 600);
+    }
+  }
+
+  function handlePageChange() {
+    if (!CandidateManager) return;
+    const currentPageId = State.currentPage ? State.currentPage.id : null;
+    if (currentPageId !== lastPageId) {
+      CandidateManager.clearCandidates();
+      lastPageId = currentPageId;
+      Render.refresh();
+    }
+  }
+
+  function toggleCandidates() {
+    candidatesVisible = !candidatesVisible;
+    const { candidateLayer } = Render.getActiveStageElements();
+    const candidateLayerSimple = document.getElementById("candidateLayerSimple");
+    const candidateLayerViewer = document.getElementById("candidateLayer");
+
+    if (candidateLayerViewer) {
+      candidateLayerViewer.style.display = candidatesVisible ? "block" : "none";
+    }
+    if (candidateLayerSimple) {
+      candidateLayerSimple.style.display = candidatesVisible ? "block" : "none";
+    }
+
+    if (candidateToggleBtn) {
+      candidateToggleBtn.textContent = candidatesVisible ? "👁" : "👁‍🗨";
+      candidateToggleBtn.title = candidatesVisible ? "隐藏候选标记" : "显示候选标记";
+    }
+  }
+
   function bindEvents() {
     imageInput.addEventListener("change", () => {
       handleFiles(imageInput.files);
@@ -1073,13 +1311,59 @@
     });
 
     exportIncludeImages.addEventListener("change", updateExportSummary);
+
+    if (candidateSensitivity) {
+      candidateSensitivity.addEventListener("input", updateSensitivityDisplay);
+    }
+
+    if (runDetectBtn) {
+      runDetectBtn.addEventListener("click", runCandidateDetection);
+    }
+
+    if (acceptAllBtn) {
+      acceptAllBtn.addEventListener("click", acceptAllPendingCandidates);
+    }
+
+    if (ignoreAllBtn) {
+      ignoreAllBtn.addEventListener("click", ignoreAllPendingCandidates);
+    }
+
+    if (applyAcceptedBtn) {
+      applyAcceptedBtn.addEventListener("click", applyAcceptedCandidates);
+    }
+
+    if (candidateList) {
+      candidateList.addEventListener("click", handleCandidateListClick);
+    }
+
+    if (candidateFilterTabs) {
+      candidateFilterTabs.addEventListener("click", (e) => {
+        const tab = e.target.closest("[data-filter]");
+        if (tab) {
+          setCandidateFilter(tab.dataset.filter);
+        }
+      });
+    }
+
+    const candidateToggleBtn = document.getElementById("candidateToggleBtn");
+    if (candidateToggleBtn) {
+      candidateToggleBtn.addEventListener("click", toggleCandidates);
+    }
+
+    State.subscribe(() => {
+      handlePageChange();
+    });
   }
 
   function bootstrap() {
     State.init();
     Render.init();
+    if (CandidateManager) {
+      CandidateManager.init();
+    }
     bindEvents();
     setMode("point");
+    updateSensitivityDisplay();
   }
 
   if (document.readyState === "loading") {

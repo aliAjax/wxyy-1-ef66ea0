@@ -25,6 +25,7 @@
       </div>
       <div class="actions">
         <button id="viewerModeBtn" type="button" title="切换超大扫描页查看器模式" class="primary">🔍 超大查看器</button>
+        <button id="autoDetectBtn" type="button" title="自动识别虫蛀候选">🔮 智能识别</button>
         <button id="configBtn" type="button" title="配置损伤类型">⚙ 类型配置</button>
         <button id="reviewBtn" type="button" title="进入复核工作台">复核工作台</button>
         <button id="diffBtn" type="button" title="双人标注差异比对">🔍 差异比对</button>
@@ -104,6 +105,7 @@
               <div class="empty" id="emptyState">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
               <img id="pageImage" alt="古籍扫描页" />
               <div id="markers" class="markers"></div>
+              <div id="candidateLayer" class="candidate-layer"></div>
               <div id="dragOverlay" class="drag-overlay"></div>
             </div>
           </div>
@@ -113,6 +115,7 @@
           <div class="empty" id="emptyStateSimple">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
           <img id="pageImageSimple" alt="古籍扫描页" />
           <div id="markersSimple" class="markers"></div>
+          <div id="candidateLayerSimple" class="candidate-layer"></div>
           <div id="dragOverlaySimple" class="drag-overlay"></div>
         </div>
 
@@ -122,6 +125,74 @@
           <button id="nextPage" type="button" title="下一页">下一页 →</button>
         </div>
       </section>
+
+      <aside class="panel candidate-panel">
+        <div class="candidate-panel-header">
+          <h2>🔮 智能识别候选</h2>
+          <button id="candidateToggleBtn" type="button" class="icon-btn" title="显示/隐藏候选标记">👁</button>
+        </div>
+
+        <div class="candidate-controls">
+          <label class="candidate-control-row">
+            <span>检测灵敏度</span>
+            <div class="slider-row">
+              <input type="range" id="candidateSensitivity" min="1" max="100" value="50" />
+              <span id="sensitivityValue">50</span>
+            </div>
+          </label>
+
+          <label class="candidate-control-row">
+            <span>检测边缘破损</span>
+            <input type="checkbox" id="detectEdgeDamage" checked />
+          </label>
+
+          <label class="candidate-control-row">
+            <span>最大候选数</span>
+            <select id="maxCandidatesSelect">
+              <option value="50">50 个</option>
+              <option value="100">100 个</option>
+              <option value="200" selected>200 个</option>
+              <option value="500">500 个</option>
+            </select>
+          </label>
+
+          <button id="runDetectBtn" type="button" class="primary full-width">
+            🔍 开始检测
+          </button>
+        </div>
+
+        <div class="candidate-stats" id="candidateStats">
+          <div class="cand-stat">
+            <span class="cand-stat-label">待处理</span>
+            <span class="cand-stat-value pending" id="candPending">0</span>
+          </div>
+          <div class="cand-stat">
+            <span class="cand-stat-label">已接受</span>
+            <span class="cand-stat-value accepted" id="candAccepted">0</span>
+          </div>
+          <div class="cand-stat">
+            <span class="cand-stat-label">已忽略</span>
+            <span class="cand-stat-value ignored" id="candIgnored">0</span>
+          </div>
+        </div>
+
+        <div class="candidate-batch-actions">
+          <button id="acceptAllBtn" type="button" class="small-btn">✓ 全部接受</button>
+          <button id="ignoreAllBtn" type="button" class="small-btn">✕ 全部忽略</button>
+          <button id="applyAcceptedBtn" type="button" class="primary small-btn">➜ 应用到标记</button>
+        </div>
+
+        <div class="candidate-filter-tabs" id="candidateFilterTabs">
+          <button type="button" class="cand-filter-tab active" data-filter="all">全部</button>
+          <button type="button" class="cand-filter-tab" data-filter="pending">待处理</button>
+          <button type="button" class="cand-filter-tab" data-filter="accepted">已接受</button>
+          <button type="button" class="cand-filter-tab" data-filter="ignored">已忽略</button>
+        </div>
+
+        <div id="candidateList" class="candidate-list">
+          <p class="candidate-empty">导入扫描页后点击「开始检测」自动识别虫蛀候选</p>
+        </div>
+      </aside>
 
       <aside class="panel list-panel">
         <h2>本页损伤记录</h2>
@@ -253,6 +324,8 @@
   <script src="./js/storage.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/project-package.js"></script>
+  <script src="./js/candidate-detector.js"></script>
+  <script src="./js/candidate-manager.js"></script>
   <script src="./js/render.js"></script>
   <script src="./js/image-viewer.js"></script>
   <script src="./app.js"></script>
