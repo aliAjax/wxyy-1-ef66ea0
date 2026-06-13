@@ -121,6 +121,8 @@
       name: raw.name || "",
       fileName: raw.fileName || "",
       image: raw.image || "",
+      imageWidth: raw.imageWidth !== undefined ? Number(raw.imageWidth) || null : null,
+      imageHeight: raw.imageHeight !== undefined ? Number(raw.imageHeight) || null : null,
       markers: Array.isArray(raw.markers)
         ? raw.markers.map((m) => normalizeMarker(m, damageTypes)).filter(Boolean)
         : [],
@@ -185,8 +187,257 @@
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
+  const BACKUP_KEY = STORAGE_KEY + "--backup";
+  const BACKUP_TIMESTAMP_KEY = STORAGE_KEY + "--backup-ts";
+  const SNAPSHOT_KEY = STORAGE_KEY + "--snapshot";
+  const SNAPSHOT_META_KEY = STORAGE_KEY + "--snapshot-meta";
+
+  function backup() {
+    try {
+      const current = localStorage.getItem(STORAGE_KEY);
+      if (current) {
+        localStorage.setItem(BACKUP_KEY, current);
+        localStorage.setItem(BACKUP_TIMESTAMP_KEY, new Date().toISOString());
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("备份当前数据失败", e);
+      return false;
+    }
+  }
+
+  function restoreBackup() {
+    try {
+      const bk = localStorage.getItem(BACKUP_KEY);
+      if (!bk) return false;
+      localStorage.setItem(STORAGE_KEY, bk);
+      localStorage.removeItem(BACKUP_KEY);
+      localStorage.removeItem(BACKUP_TIMESTAMP_KEY);
+      return true;
+    } catch (e) {
+      console.error("恢复备份失败", e);
+      return false;
+    }
+  }
+
+  function clearBackup() {
+    try {
+      localStorage.removeItem(BACKUP_KEY);
+      localStorage.removeItem(BACKUP_TIMESTAMP_KEY);
+    } catch (e) {}
+  }
+
+  function getBackupTimestamp() {
+    try {
+      return localStorage.getItem(BACKUP_TIMESTAMP_KEY) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function verifyBackupIntegrity() {
+    try {
+      var bk = localStorage.getItem(BACKUP_KEY);
+      if (!bk) return { valid: false, reason: "no_backup" };
+      var parsed = JSON.parse(bk);
+      if (!parsed || typeof parsed !== "object") return { valid: false, reason: "invalid_json" };
+      if (!Array.isArray(parsed.pages)) return { valid: false, reason: "missing_pages" };
+      return { valid: true, pageCount: parsed.pages.length };
+    } catch (e) {
+      return { valid: false, reason: "parse_error", error: e.message };
+    }
+  }
+
+  function createSnapshot() {
+    try {
+      var current = localStorage.getItem(STORAGE_KEY);
+      if (!current) return { success: false, reason: "no_data" };
+      var parsed = JSON.parse(current);
+      if (!parsed) return { success: false, reason: "invalid_data" };
+      var meta = {
+        timestamp: new Date().toISOString(),
+        pageCount: Array.isArray(parsed.pages) ? parsed.pages.length : 0,
+        totalMarkers: Array.isArray(parsed.pages)
+          ? parsed.pages.reduce(function (a, p) { return a + (Array.isArray(p.markers) ? p.markers.length : 0); }, 0)
+          : 0,
+        volumeTitle: parsed.volumeTitle || "",
+        volumeId: parsed.volumeId || "",
+      };
+      localStorage.setItem(SNAPSHOT_KEY, current);
+      localStorage.setItem(SNAPSHOT_META_KEY, JSON.stringify(meta));
+      return { success: true, meta: meta };
+    } catch (e) {
+      console.error("创建快照失败", e);
+      return { success: false, reason: "storage_error", error: e.message };
+    }
+  }
+
+  function restoreSnapshot() {
+    try {
+      var snapshot = localStorage.getItem(SNAPSHOT_KEY);
+      if (!snapshot) return false;
+      localStorage.setItem(STORAGE_KEY, snapshot);
+      return true;
+    } catch (e) {
+      console.error("恢复快照失败", e);
+      return false;
+    }
+  }
+
+  function clearSnapshot() {
+    try {
+      localStorage.removeItem(SNAPSHOT_KEY);
+      localStorage.removeItem(SNAPSHOT_META_KEY);
+    } catch (e) {}
+  }
+
+  function getSnapshotMeta() {
+    try {
+      var meta = localStorage.getItem(SNAPSHOT_META_KEY);
+      return meta ? JSON.parse(meta) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function preFlightCheck(estimatedSize) {
+    var currentData = localStorage.getItem(STORAGE_KEY);
+    var currentDataSize = currentData ? currentData.length * 2 : 0;
+    var totalUsage = 0;
+    try {
+      for (var key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          totalUsage += (localStorage[key].length + key.length) * 2;
+        }
+      }
+    } catch (e) {}
+    var typicalLimit = 5 * 1024 * 1024;
+    var availableAfterImport = typicalLimit - totalUsage - estimatedSize + currentDataSize;
+    return {
+      canProceed: availableAfterImport > 256 * 1024,
+      currentDataSize: currentDataSize,
+      totalUsage: totalUsage,
+      estimatedNewSize: estimatedSize,
+      availableAfterImport: availableAfterImport,
+    };
+  }
+
+  function estimateCurrentDataSize() {
+    try {
+      var data = localStorage.getItem(STORAGE_KEY);
+      return data ? data.length * 2 : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function getStorageUsage() {
+    var totalUsage = 0;
+    try {
+      for (var key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          totalUsage += (localStorage[key].length + key.length) * 2;
+        }
+      }
+    } catch (e) {}
+    return totalUsage;
+  }
+
+  function hasExistingData() {
+    try {
+      var raw = readRaw();
+      if (!raw) return false;
+      if (raw.pages && Array.isArray(raw.pages) && raw.pages.length > 0) return true;
+      if (raw.volumeId || raw.volumeTitle) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getRestoreEstimate(packageData) {
+    if (!packageData || typeof packageData !== "object") return null;
+    var pages = packageData.pages || [];
+    var totalMarkers = pages.reduce(function (a, p) {
+      return a + (Array.isArray(p.markers) ? p.markers.length : 0);
+    }, 0);
+    var pagesWithImages = pages.filter(function (p) { return p.image && p.image.length > 0; }).length;
+    var pagesWithoutImages = pages.length - pagesWithImages;
+    var estimatedStorageKB = 0;
+    try {
+      var state = restoreFromPackage(packageData);
+      estimatedStorageKB = Math.round(new Blob([JSON.stringify(state)]).size / 1024);
+    } catch (e) {
+      pagesWithImages.forEach(function (p) {
+        if (p.image) estimatedStorageKB += Math.round((p.image.length * 3) / 4 / 1024);
+      });
+      estimatedStorageKB += Math.round(totalMarkers * 0.2 + pages.length * 0.5);
+    }
+    return {
+      pageCount: pages.length,
+      totalMarkers: totalMarkers,
+      pagesWithImages: pagesWithImages,
+      pagesWithoutImages: pagesWithoutImages,
+      damageTypeCount: Array.isArray(packageData.damageTypes) ? packageData.damageTypes.length : 0,
+      estimatedStorageKB: estimatedStorageKB,
+      projectTitle: packageData.project ? packageData.project.title : "",
+      projectId: packageData.project ? packageData.project.id : "",
+    };
+  }
+
+  function restoreFromPackage(packageData) {
+    if (!packageData || typeof packageData !== "object") {
+      throw new Error("无效的工作包数据");
+    }
+
+    if (!Array.isArray(packageData.pages) || packageData.pages.length === 0) {
+      throw new Error("工作包中没有页面数据");
+    }
+
+    if (!Array.isArray(packageData.damageTypes) || packageData.damageTypes.length === 0) {
+      throw new Error("工作包中损伤类型配置无效");
+    }
+
+    var now = new Date().toISOString();
+    var projectId = "";
+    var projectTitle = "";
+    var projectCreatedAt = now;
+
+    if (packageData.project && typeof packageData.project === "object") {
+      projectId = packageData.project.id || "";
+      projectTitle = packageData.project.title || "";
+      projectCreatedAt = packageData.project.createdAt || now;
+    } else if (packageData.volume && typeof packageData.volume === "object") {
+      projectId = packageData.volume.id || "";
+      projectTitle = packageData.volume.title || "";
+      projectCreatedAt = packageData.volume.createdAt || now;
+    }
+
+    var normalizedPages = packageData.pages.map(function (p) {
+      return normalizePage(p, packageData.damageTypes);
+    }).filter(Boolean);
+
+    if (normalizedPages.length === 0) {
+      throw new Error("工作包中没有有效的页面数据");
+    }
+
+    var state = normalizeState({
+      volumeId: projectId,
+      volumeTitle: projectTitle,
+      pages: normalizedPages,
+      currentPageId: normalizedPages[0].id,
+      createdAt: projectCreatedAt,
+      updatedAt: now,
+      damageTypes: packageData.damageTypes,
+    });
+
+    return state;
+  }
+
   const VolumeStorage = {
     KEY: STORAGE_KEY,
+    BACKUP_KEY: BACKUP_KEY,
     DEFAULT_DAMAGE_TYPES,
     MODES,
 
@@ -219,6 +470,22 @@
       writeRaw(fresh);
       return fresh;
     },
+
+    backup,
+    restoreBackup,
+    clearBackup,
+    getBackupTimestamp,
+    verifyBackupIntegrity,
+    createSnapshot,
+    restoreSnapshot,
+    clearSnapshot,
+    getSnapshotMeta,
+    preFlightCheck,
+    estimateCurrentDataSize,
+    getStorageUsage,
+    hasExistingData,
+    getRestoreEstimate,
+    restoreFromPackage,
 
     export(state) {
       const damageTypes = state.damageTypes || structuredClone(DEFAULT_DAMAGE_TYPES);

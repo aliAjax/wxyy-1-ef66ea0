@@ -27,7 +27,9 @@
         <button id="viewerModeBtn" type="button" title="切换超大扫描页查看器模式" class="primary">🔍 超大查看器</button>
         <button id="configBtn" type="button" title="配置损伤类型">⚙ 类型配置</button>
         <button id="reviewBtn" type="button" title="进入复核工作台">复核工作台</button>
-        <button id="exportBtn" type="button" title="导出JSON">导出</button>
+        <button id="exportBtn" type="button" title="导出项目工作包">📦 导出</button>
+        <button id="importBtn" type="button" title="导入项目工作包">📥 导入</button>
+        <input id="importFileInput" type="file" accept=".json" style="display:none;" />
         <button id="clearBtn" type="button" title="清空当前页记录">清空本页</button>
         <button id="clearAllBtn" type="button" title="清空全部卷册数据" class="danger">全部清空</button>
       </div>
@@ -168,8 +170,88 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="exportModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>📦 导出项目工作包</h2>
+        <button class="modal-close" id="closeExportBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="exportSummary" class="export-summary"></div>
+        <label class="export-option">
+          <input type="checkbox" id="exportIncludeImages" checked />
+          <span>包含图片数据</span>
+          <span class="export-option-hint" id="exportImageSizeHint"></span>
+        </label>
+        <div class="export-option-note" id="exportOptionNote">
+          不含图片的工作包仅保存标记数据，导入后需重新导入扫描页才能查看标记位置。
+        </div>
+        <div id="exportSizeEstimate" class="export-size-estimate"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelExportBtn" type="button">取消</button>
+        <button id="confirmExportBtn" type="button" class="primary">确认导出</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="importModal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>📥 导入项目工作包</h2>
+        <button class="modal-close" id="closeImportBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="import-drop-zone" id="importDropZone">
+          <div class="import-drop-zone-icon">📄</div>
+          <div class="import-drop-zone-text">拖拽工作包文件到此处</div>
+          <div class="import-drop-zone-hint">或 <button type="button" class="import-drop-zone-browse" id="importDropZoneBrowse">点击选择文件</button></div>
+          <div class="import-drop-zone-formats">支持 .json 格式（项目工作包 / 旧版卷册 / 旧版单页标记）</div>
+        </div>
+
+        <div id="importError" class="import-error" style="display:none;"></div>
+        <div id="importWarning" class="import-warning" style="display:none;"></div>
+        <div id="importQuotaWarning" class="import-quota-warning" style="display:none;"></div>
+        <div id="importCurrentDataWarning" class="import-current-data-warning" style="display:none;"></div>
+
+        <div id="importFileInfo" class="import-file-info" style="display:none;"></div>
+
+        <div id="importIntegrity" class="import-integrity" style="display:none;"></div>
+
+        <div id="importSummary" class="import-summary" style="display:none;"></div>
+
+        <div id="importMigrationDetail" class="import-migration-detail" style="display:none;"></div>
+
+        <div id="importRestoreWarnings" class="import-restore-warnings" style="display:none;"></div>
+
+        <div id="importLoading" class="import-loading" style="display:none;">
+          <div class="import-spinner"></div>
+          <span>正在解析工作包…</span>
+        </div>
+        <div id="importSuccess" class="import-success" style="display:none;">
+          <span class="import-success-icon">✓</span>
+          <div class="import-success-detail">
+            <span>导入成功！工作状态已恢复。</span>
+            <div id="importSuccessInfo" class="import-success-info"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="import-safety-note" id="importSafetyNote" style="display:none;">
+          <span class="import-safety-icon">🛡</span>
+          <span>导入前已自动备份当前数据，失败时将自动回滚</span>
+        </div>
+        <button id="cancelImportBtn" type="button">取消</button>
+        <button id="confirmImportBtn" type="button" class="primary" style="display:none;">确认导入</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
   <script src="./js/storage.js"></script>
   <script src="./js/state.js"></script>
+  <script src="./js/project-package.js"></script>
   <script src="./js/render.js"></script>
   <script src="./js/image-viewer.js"></script>
   <script src="./app.js"></script>

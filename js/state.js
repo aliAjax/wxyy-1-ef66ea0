@@ -63,6 +63,68 @@
       return this._state.pages.length > 0;
     },
 
+    hasData() {
+      if (this._state.pages.length > 0) return true;
+      if (this._state.volumeId || this._state.volumeTitle) return true;
+      return false;
+    },
+
+    getImportPreview(packageData) {
+      if (!packageData) return null;
+      var summary = global.ProjectPackage.getPackageSummary(packageData);
+      var restoreCheck = global.ProjectPackage.validateForRestore(packageData);
+      var estimate = global.VolumeStorage.getRestoreEstimate(packageData);
+      return {
+        summary: summary,
+        restoreCheck: restoreCheck,
+        estimate: estimate,
+        hasExistingData: this.hasData(),
+        currentDataSummary: this.hasData() ? {
+          pageCount: this._state.pages.length,
+          totalMarkers: this.getTotalMarkers(),
+          projectTitle: this._state.volumeTitle || "",
+        } : null,
+      };
+    },
+
+    preImportValidation(packageData) {
+      var result = {
+        canProceed: true,
+        warnings: [],
+        errors: [],
+        quotaOk: true,
+      };
+
+      if (!packageData) {
+        result.canProceed = false;
+        result.errors.push("包数据为空");
+        return result;
+      }
+
+      var preCheck = global.ProjectPackage.validateForRestore(packageData);
+      if (!preCheck.canRestore) {
+        result.canProceed = false;
+        preCheck.issues.forEach(function (i) {
+          result.errors.push(i.message || String(i));
+        });
+        return result;
+      }
+
+      if (preCheck.warnings && preCheck.warnings.length > 0) {
+        result.warnings = result.warnings.concat(preCheck.warnings);
+      }
+
+      var estimatedSize = preCheck.estimatedStorageSize || 0;
+      var preFlight = global.VolumeStorage.preFlightCheck(estimatedSize);
+      if (!preFlight.canProceed) {
+        result.quotaOk = false;
+        result.canProceed = false;
+        result.errors.push("存储空间不足，无法完成导入");
+      }
+
+      return result;
+    },
+
     get damageTypes() {
       return this._state.damageTypes;
     },
@@ -286,6 +348,115 @@
       this._persist();
       this._notify();
       return true;
+    },
+
+    restoreFromPackage(packageData) {
+      var preCheck = global.ProjectPackage.validateForRestore(packageData);
+      if (!preCheck.canRestore) {
+        var preErrorMsg = preCheck.issues.map(function (i) {
+          return i.message || String(i);
+        }).join("；");
+        return {
+          success: false,
+          error: new Error(preErrorMsg || "工作包验证未通过，无法恢复"),
+          rolledBack: false,
+          errorMessage: preErrorMsg || "工作包验证未通过",
+          isQuotaError: false,
+          preCheckFailed: true,
+        };
+      }
+
+      var snapshotResult = global.VolumeStorage.createSnapshot();
+      var backupSuccess = global.VolumeStorage.backup();
+
+      try {
+        var newState = global.VolumeStorage.restoreFromPackage(packageData);
+
+        if (!newState || !Array.isArray(newState.pages) || newState.pages.length === 0) {
+          throw new Error("恢复后的状态数据无效");
+        }
+
+        var integrityCheck = global.ProjectPackage.verifyRoundTripIntegrity(packageData, newState);
+        if (!integrityCheck.valid) {
+          console.warn("往返完整性校验发现问题:", integrityCheck.issues);
+          if (integrityCheck.issues.some(function (i) { return i.indexOf("页面数量") !== -1 || i.indexOf("标记数量") !== -1; })) {
+            throw new Error("数据完整性校验失败：" + integrityCheck.issues.join("；"));
+          }
+        }
+
+        var saveSuccess = global.VolumeStorage.save(newState);
+        if (!saveSuccess) {
+          throw new Error("保存恢复后的数据失败，可能是浏览器存储空间不足");
+        }
+
+        this._state = newState;
+        this._touchCurrentPage();
+        refreshMarkerTypeNames(this._state);
+        this._notify();
+
+        if (backupSuccess) {
+          global.VolumeStorage.clearBackup();
+        }
+        global.VolumeStorage.clearSnapshot();
+
+        return {
+          success: true,
+          state: newState,
+          pageCount: newState.pages.length,
+          markerCount: newState.pages.reduce(function (acc, p) {
+            return acc + (p.markers ? p.markers.length : 0);
+          }, 0),
+          warnings: (preCheck.warnings || []).concat(integrityCheck.warnings || []),
+          projectTitle: newState.volumeTitle || "",
+          snapshotMeta: snapshotResult.success ? snapshotResult.meta : null,
+        };
+      } catch (e) {
+        console.error("恢复工作包失败，正在回滚", e);
+
+        var rolledBack = false;
+        var rollbackMethod = "none";
+
+        if (snapshotResult.success) {
+          rolledBack = global.VolumeStorage.restoreSnapshot();
+          rollbackMethod = rolledBack ? "snapshot" : "none";
+        }
+
+        if (!rolledBack && backupSuccess) {
+          var backupValid = global.VolumeStorage.verifyBackupIntegrity();
+          if (backupValid.valid) {
+            rolledBack = global.VolumeStorage.restoreBackup();
+            rollbackMethod = rolledBack ? "backup" : "none";
+          }
+        }
+
+        if (rolledBack) {
+          this._state = global.VolumeStorage.load();
+          this._notify();
+        }
+
+        global.VolumeStorage.clearSnapshot();
+
+        var isQuotaError = e.name === "QuotaExceededError" ||
+          (e.message && e.message.indexOf("quota") !== -1) ||
+          (e.message && e.message.indexOf("存储空间") !== -1);
+
+        return {
+          success: false,
+          error: e,
+          rolledBack: rolledBack,
+          rollbackMethod: rollbackMethod,
+          errorMessage: e.message || String(e),
+          isQuotaError: isQuotaError,
+          backupWasCreated: backupSuccess,
+          snapshotWasCreated: snapshotResult.success,
+        };
+      }
+    },
+
+    checkImportQuota(packageData) {
+      var estimatedSize = global.ProjectPackage.estimatePackageStorageSize(packageData);
+      var quotaInfo = global.ProjectPackage.checkStorageQuota(estimatedSize);
+      return quotaInfo;
     },
 
     resetAll() {

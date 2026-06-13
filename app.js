@@ -1,19 +1,77 @@
 (function () {
-  const { createPage, export: buildExport } = window.VolumeStorage;
+  const { createPage } = window.VolumeStorage;
   const State = window.VolumeState;
   const Render = window.VolumeRender;
+  const Package = window.ProjectPackage;
 
   const imageInput = document.getElementById("imageInput");
   const noteInput = document.getElementById("noteInput");
   const configBtn = document.getElementById("configBtn");
   const reviewBtn = document.getElementById("reviewBtn");
   const exportBtn = document.getElementById("exportBtn");
+  const importBtn = document.getElementById("importBtn");
+  const importFileInput = document.getElementById("importFileInput");
   const clearBtn = document.getElementById("clearBtn");
   const clearAllBtn = document.getElementById("clearAllBtn");
   const modeSwitch = document.getElementById("modeSwitch");
 
+  const importModal = document.getElementById("importModal");
+  const importError = document.getElementById("importError");
+  const importWarning = document.getElementById("importWarning");
+  const importQuotaWarning = document.getElementById("importQuotaWarning");
+  const importCurrentDataWarning = document.getElementById("importCurrentDataWarning");
+  const importFileInfo = document.getElementById("importFileInfo");
+  const importIntegrity = document.getElementById("importIntegrity");
+  const importSummary = document.getElementById("importSummary");
+  const importMigrationDetail = document.getElementById("importMigrationDetail");
+  const importRestoreWarnings = document.getElementById("importRestoreWarnings");
+  const importLoading = document.getElementById("importLoading");
+  const importSuccess = document.getElementById("importSuccess");
+  const importSuccessInfo = document.getElementById("importSuccessInfo");
+  const importSafetyNote = document.getElementById("importSafetyNote");
+  const importDropZone = document.getElementById("importDropZone");
+  const importDropZoneBrowse = document.getElementById("importDropZoneBrowse");
+  const closeImportBtn = document.getElementById("closeImportBtn");
+  const cancelImportBtn = document.getElementById("cancelImportBtn");
+  const confirmImportBtn = document.getElementById("confirmImportBtn");
+
+  const exportModal = document.getElementById("exportModal");
+  const exportSummary = document.getElementById("exportSummary");
+  const exportIncludeImages = document.getElementById("exportIncludeImages");
+  const exportImageSizeHint = document.getElementById("exportImageSizeHint");
+  const exportOptionNote = document.getElementById("exportOptionNote");
+  const exportSizeEstimate = document.getElementById("exportSizeEstimate");
+  const closeExportBtn = document.getElementById("closeExportBtn");
+  const cancelExportBtn = document.getElementById("cancelExportBtn");
+  const confirmExportBtn = document.getElementById("confirmExportBtn");
+
   let currentMode = "point";
   let dragState = null;
+  let pendingImportData = null;
+
+  var toastContainer = document.getElementById("toastContainer");
+
+  function showToast(message, type, duration) {
+    if (!toastContainer) return;
+    type = type || "info";
+    duration = duration || 3000;
+    var toast = document.createElement("div");
+    toast.className = "toast toast-" + type;
+    toast.innerHTML = '<span class="toast-icon">' +
+      (type === "success" ? "✓" : type === "error" ? "✕" : type === "warning" ? "⚠" : "ℹ") +
+      '</span><span class="toast-message">' + escapeHtmlSimple(message) + '</span>';
+    toastContainer.appendChild(toast);
+    requestAnimationFrame(function () {
+      toast.classList.add("toast-visible");
+    });
+    setTimeout(function () {
+      toast.classList.remove("toast-visible");
+      toast.classList.add("toast-exit");
+      setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
+    }, duration);
+  }
 
   function getActiveElements() {
     return Render.getActiveStageElements();
@@ -310,59 +368,471 @@
       .slice(0, 40);
   }
 
-  function handleExport() {
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function updateExportSummary() {
+    var includeImages = exportIncludeImages.checked;
+    var options = { includeImages: includeImages };
+    var summary = Package.getExportSummary(State.all, options);
+
+    exportSummary.innerHTML =
+      '<div class="export-summary-row"><span>项目名称</span><strong>' + escapeHtmlSimple(summary.projectName) + '</strong></div>' +
+      '<div class="export-summary-row"><span>页面数</span><strong>' + summary.pageCount + ' 页</strong></div>' +
+      '<div class="export-summary-row"><span>标记总数</span><strong class="accent">' + summary.totalMarkers + ' 条</strong></div>' +
+      '<div class="export-summary-row"><span>损伤类型</span><strong>' + summary.damageTypeCount + ' 种</strong></div>' +
+      '<div class="export-summary-row"><span>格式版本</span><strong>v' + Package.PACKAGE_VERSION + '</strong></div>';
+
+    if (includeImages && summary.hasImages) {
+      exportImageSizeHint.textContent = "（约 " + formatFileSize(summary.totalImageSizeKB * 1024) + "）";
+      exportImageSizeHint.style.display = "inline";
+    } else {
+      exportImageSizeHint.textContent = "";
+      exportImageSizeHint.style.display = "none";
+    }
+
+    exportOptionNote.style.display = includeImages ? "none" : "block";
+
+    exportSizeEstimate.innerHTML =
+      '<span class="export-size-label">预估文件大小</span>' +
+      '<span class="export-size-value' + (summary.estimatedFileSizeKB > 10240 ? " large" : "") + '">' + formatFileSize(summary.estimatedFileSizeKB * 1024) + '</span>';
+  }
+
+  function openExportModal() {
     if (!State.hasPages) {
-      alert("卷册中暂无任何页面，无法导出。");
+      showToast("卷册中暂无任何页面，无法导出", "warning");
       return;
     }
-    const payload = buildExport(State.all);
+    exportIncludeImages.checked = true;
+    updateExportSummary();
+    exportModal.style.display = "flex";
+  }
+
+  function closeExportModal() {
+    exportModal.style.display = "none";
+  }
+
+  function performExport() {
+    var includeImages = exportIncludeImages.checked;
+    var state = State.all;
+    var packageObj = Package.exportPackage(state, { includeImages: includeImages });
 
     if (Render.viewerMode && Render.imageViewer && Render.imageViewer.imageLoaded) {
-      const page = State.currentPage;
-      if (page && page.markers.length > 0) {
-        const imageInfo = Render.imageViewer.getImageInfo();
-        payload.viewerInfo = {
-          imageWidth: imageInfo.naturalWidth,
-          imageHeight: imageInfo.naturalHeight,
-          currentPageId: page.id,
-        };
-        if (payload.pages) {
-          const pageData = payload.pages.find((p) => p.id === page.id);
-          if (pageData) {
+      var imageInfo = Render.imageViewer.getImageInfo();
+      if (packageObj.pages) {
+        packageObj.pages.forEach(function (pageData) {
+          var statePage = state.pages.find(function (p) { return p.id === pageData.id; });
+          if (statePage && statePage.image && statePage.markers.length > 0) {
             pageData.imageWidth = imageInfo.naturalWidth;
             pageData.imageHeight = imageInfo.naturalHeight;
-            pageData.markers = page.markers
-              .map((m) => Render.imageViewer.exportRealCoords(m))
-              .filter(Boolean);
+            if (statePage === State.currentPage) {
+              pageData.markers = statePage.markers
+                .map(function (m) { return Render.imageViewer.exportRealCoords(m); })
+                .filter(Boolean);
+            }
           }
-        }
+        });
       }
     }
 
-    const idPart = sanitizeFilenamePart(payload.volume.id);
-    const titlePart = sanitizeFilenamePart(payload.volume.title);
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const parts = ["archive-volume"];
-    if (idPart) parts.push(idPart);
-    if (titlePart) parts.push(titlePart);
-    parts.push(stamp);
+    packageObj._checksum = Package.computeChecksum(packageObj);
+    Package.downloadPackage(packageObj);
+    closeExportModal();
+    showToast("项目工作包已导出（v" + Package.PACKAGE_VERSION + "）", "success");
+  }
 
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
+  function handleExport() {
+    openExportModal();
+  }
+
+  function hideAllImportStates() {
+    importError.style.display = "none";
+    importWarning.style.display = "none";
+    importQuotaWarning.style.display = "none";
+    importCurrentDataWarning.style.display = "none";
+    importFileInfo.style.display = "none";
+    importIntegrity.style.display = "none";
+    importSummary.style.display = "none";
+    importMigrationDetail.style.display = "none";
+    importRestoreWarnings.style.display = "none";
+    importLoading.style.display = "none";
+    importSuccess.style.display = "none";
+    importSafetyNote.style.display = "none";
+    confirmImportBtn.style.display = "none";
+  }
+
+  function showImportError(title, detail, errorCode, resolution) {
+    var html = '<span class="import-error-title">⚠ ' + escapeHtmlSimple(title) + '</span>';
+    if (detail) {
+      html += '<div class="import-error-detail">' + escapeHtmlSimple(detail) + '</div>';
+    }
+    if (errorCode) {
+      html += '<div class="import-error-code">错误码：' + escapeHtmlSimple(errorCode) + '</div>';
+    }
+    if (resolution) {
+      html += '<div class="import-error-resolution">💡 ' + escapeHtmlSimple(resolution) + '</div>';
+    }
+    importError.innerHTML = html;
+    importError.style.display = "block";
+    importError.classList.add("import-error-shake");
+    setTimeout(function () {
+      importError.classList.remove("import-error-shake");
+    }, 500);
+    importDropZone.style.display = "block";
+    importDropZone.classList.remove("has-file");
+  }
+
+  function showImportWarning(title, message) {
+    importWarning.innerHTML =
+      '<span class="import-warning-title">⚡ ' + escapeHtmlSimple(title) + '</span>' +
+      (message ? '<div>' + escapeHtmlSimple(message) + '</div>' : '');
+    importWarning.style.display = "block";
+  }
+
+  function showImportCurrentDataWarning(currentDataSummary) {
+    if (!currentDataSummary) return;
+    var html =
+      '<div class="import-current-data-warning-title">⚠ 当前存在工作数据</div>' +
+      '<div>当前项目：' + escapeHtmlSimple(currentDataSummary.projectTitle || "未命名") + '，共 ' +
+      currentDataSummary.pageCount + ' 页、' + currentDataSummary.totalMarkers + ' 条标记。</div>' +
+      '<div class="import-current-data-warning-detail">导入工作包将替换当前所有数据。导入前会自动创建快照和备份，如失败将自动回滚。</div>';
+    importCurrentDataWarning.innerHTML = html;
+    importCurrentDataWarning.style.display = "block";
+  }
+
+  function showImportQuotaWarning(quotaInfo) {
+    var levelClass = quotaInfo.warningLevel === "critical" ? " critical" : "";
+    var levelText = quotaInfo.warningLevel === "critical" ? "严重不足" : "空间紧张";
+    importQuotaWarning.innerHTML =
+      '<span class="import-quota-warning-title">存储空间' + escapeHtmlSimple(levelText) + '</span>' +
+      '<div>导入后预估需要 ' + formatFileSize(quotaInfo.estimatedSize) + ' 存储空间。</div>' +
+      '<div>当前已用 ' + formatFileSize(quotaInfo.currentUsage) + '，导入后剩余约 ' + formatFileSize(Math.max(0, quotaInfo.availableAfterImport)) + '。</div>' +
+      '<div class="import-quota-hint">建议：先导出备份当前数据，再清空后导入。如数据不含图片，存储压力会大幅降低。</div>';
+    importQuotaWarning.className = "import-quota-warning" + levelClass;
+    importQuotaWarning.style.display = "block";
+  }
+
+  function showImportFileInfo(file, quickInfo) {
+    var sizeStr = formatFileSize(file.size);
+    importFileInfo.innerHTML =
+      '<span class="import-file-info-icon">📄</span>' +
+      '<span class="import-file-info-name">' + escapeHtmlSimple(file.name) + '</span>' +
+      '<span class="import-file-info-size">' + sizeStr + '</span>';
+    importFileInfo.style.display = "flex";
+  }
+
+  function showImportIntegrity(quickInfo) {
+    if (quickInfo.integrityVerified) {
+      importIntegrity.className = "import-integrity verified";
+      importIntegrity.innerHTML = "✓ 完整性校验通过";
+    } else if (quickInfo.isLegacyFormat) {
+      importIntegrity.className = "import-integrity unverified";
+      importIntegrity.innerHTML = "ℹ 旧版格式（无校验信息）";
+    } else {
+      importIntegrity.className = "import-integrity unverified";
+      importIntegrity.innerHTML = "ℹ 未包含校验信息";
+    }
+    importIntegrity.style.display = "inline-flex";
+  }
+
+  function showImportSummary(summary, packageData) {
+    const timeStr = summary.exportedAt
+      ? new Date(summary.exportedAt).toLocaleString("zh-CN")
+      : "未知";
+
+    const rows = [
+      ["项目名称", summary.packageName],
+      ["页面数", summary.pageCount + " 页"],
+      ["标记总数", summary.totalMarkers + " 条"],
+      ["损伤类型", summary.damageTypeCount + " 种"],
+      ["包含图片", summary.hasImages ? "是" : "否（仅标记数据）"],
+      ["导出时间", timeStr],
+      ["格式版本", summary.formatVersion],
+    ];
+
+    var typeListHtml = "";
+    if (packageData && packageData.damageTypes) {
+      var typeCounts = summary.typeCounts || {};
+      typeListHtml = '<div class="import-summary-type-list">';
+      packageData.damageTypes.forEach(function (t) {
+        var count = typeCounts[t.name] || 0;
+        typeListHtml +=
+          '<div class="import-summary-type-item">' +
+            '<span class="import-summary-type-dot" style="background:' + t.color + ';"></span>' +
+            '<span class="import-summary-type-name">' + escapeHtmlSimple(t.name) + '</span>' +
+            '<span class="import-summary-type-count">' + count + ' 条</span>' +
+          '</div>';
+      });
+      typeListHtml += '</div>';
+    }
+
+    var versionBadge = summary.wasMigrated
+      ? '<span class="import-summary-title-badge">已迁移</span>'
+      : '<span class="import-summary-title-badge">v' + escapeHtmlSimple(summary.formatVersion) + '</span>';
+
+    importSummary.innerHTML =
+      '<div class="import-summary-title">工作包内容预览 ' + versionBadge + '</div>' +
+      rows.map(function (r) {
+        return '<div class="import-summary-row">' +
+          '<span class="import-summary-label">' + escapeHtmlSimple(r[0]) + '</span>' +
+          '<span class="import-summary-value' + (r[0] === "标记总数" ? " accent" : "") + '">' + escapeHtmlSimple(r[1]) + '</span>' +
+        '</div>';
+      }).join("") +
+      typeListHtml +
+      (summary.wasMigrated
+        ? '<div class="import-summary-note">此文件由旧格式（' + escapeHtmlSimple(summary.migratedFrom || "未知") + ' v' + escapeHtmlSimple(summary.originalFormatVersion || "?") + '）自动迁移而来，数据结构已适配当前版本。</div>'
+        : "") +
+      '<div class="import-summary-note">导入将替换当前所有工作数据，请确认已备份现有数据。</div>';
+
+    importSummary.style.display = "block";
+  }
+
+  function showImportMigrationDetail(result) {
+    if (!result.wasMigrated) return;
+    var steps = [];
+    var originalFormat = result.migratedFrom || "旧版格式";
+    var originalVersion = result.originalFormatVersion || "未知";
+
+    steps.push({ label: "原始格式：" + originalFormat + " v" + originalVersion });
+
+    if (result.migrationSteps && result.migrationSteps.length > 0) {
+      result.migrationSteps.forEach(function (s) {
+        steps.push({ label: s });
+      });
+    } else {
+      steps.push({ label: "↓ 自动迁移" });
+      steps.push({ label: "当前格式：" + Package.PACKAGE_FORMAT + " v" + Package.PACKAGE_VERSION });
+    }
+
+    var html =
+      '<div class="import-migration-detail-title">🔄 版本迁移路径</div>' +
+      steps.map(function (s) {
+        return '<div class="import-migration-step">' +
+          '<span class="import-migration-step-label">' + escapeHtmlSimple(s.label) + '</span>' +
+        '</div>';
+      }).join("");
+
+    if (result.migrationNotes && result.migrationNotes.length > 0) {
+      html += '<div class="import-migration-notes">';
+      result.migrationNotes.forEach(function (note) {
+        html += '• ' + escapeHtmlSimple(note) + '<br/>';
+      });
+      html += '</div>';
+    }
+
+    importMigrationDetail.innerHTML = html;
+    importMigrationDetail.style.display = "block";
+  }
+
+  function showImportRestoreWarnings(warnings) {
+    if (!warnings || warnings.length === 0) return;
+    var html = "";
+    warnings.forEach(function (w) {
+      var icon = w.code === "MISSING_IMAGES" ? "🖼" :
+        w.code === "QUOTA_CRITICAL" ? "🔴" :
+        w.code === "QUOTA_WARNING" ? "🟡" : "⚠";
+      html +=
+        '<div class="import-restore-warning-item">' +
+          '<span class="import-restore-warning-icon">' + icon + '</span>' +
+          '<span class="import-restore-warning-text">' + escapeHtmlSimple(w.message) + '</span>' +
+        '</div>';
     });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${parts.join("_")}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+    importRestoreWarnings.innerHTML = html;
+    importRestoreWarnings.style.display = "block";
+  }
+
+  function escapeHtmlSimple(str) {
+    if (str == null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function openImportModal() {
+    hideAllImportStates();
+    importDropZone.style.display = "block";
+    importDropZone.classList.remove("has-file", "drag-over");
+    importModal.style.display = "flex";
+    pendingImportData = null;
+    if (State.hasData()) {
+      importSafetyNote.style.display = "flex";
+      importSafetyNote.innerHTML =
+        '<span class="import-safety-icon">🛡</span>' +
+        '<span>导入前将自动创建快照和备份，失败时将自动回滚</span>';
+    }
+  }
+
+  function closeImportModal() {
+    importModal.style.display = "none";
+    pendingImportData = null;
+    importFileInput.value = "";
+  }
+
+  function handleImportFile(file) {
+    if (!file) return;
+
+    hideAllImportStates();
+    importDropZone.style.display = "none";
+    importLoading.style.display = "flex";
+
+    const reader = new FileReader();
+    reader.onerror = function () {
+      importLoading.style.display = "none";
+      showImportError("文件读取失败", "无法读取选中的文件，请检查文件是否损坏。");
+    };
+    reader.onload = function () {
+      importLoading.style.display = "none";
+
+      var quickInfo = Package.getQuickInfo(reader.result);
+      showImportFileInfo(file, quickInfo);
+
+      if (!quickInfo.valid) {
+        var resolution = quickInfo.errorCode ? Package.ERROR_RESOLUTIONS[quickInfo.errorCode] : null;
+        showImportError(
+          "文件格式无法识别",
+          quickInfo.error,
+          quickInfo.errorCode,
+          resolution
+        );
+        return;
+      }
+
+      if (quickInfo.sizeWarning) {
+        showImportWarning(
+          "文件较大",
+          "此工作包文件约 " + formatFileSize(quickInfo.fileSize) + "，解析可能需要一些时间，请耐心等待。"
+        );
+      }
+
+      try {
+        var result = Package.importPackage(reader.result);
+        pendingImportData = result.packageData;
+
+        showImportIntegrity(quickInfo);
+
+        var summary = Package.getPackageSummary(result.packageData);
+
+        if (result.wasMigrated) {
+          showImportWarning(
+            "旧格式自动迁移",
+            "检测到文件格式为 " + (result.migratedFrom || "旧版") + "，已自动迁移为当前项目工作包格式。原始版本：" + (result.originalFormatVersion || "未知")
+          );
+          showImportMigrationDetail(result);
+        }
+
+        if (State.hasData()) {
+          showImportCurrentDataWarning({
+            projectTitle: State.all.volumeTitle,
+            pageCount: State.pages.length,
+            totalMarkers: State.getTotalMarkers(),
+          });
+          importSafetyNote.style.display = "flex";
+          importSafetyNote.innerHTML =
+            '<span class="import-safety-icon">🛡</span>' +
+            '<span>导入前将自动创建快照和备份，失败时将自动回滚</span>';
+        }
+
+        showImportSummary(summary, result.packageData);
+
+        var restoreCheck = Package.validateForRestore(result.packageData);
+        if (restoreCheck.warnings && restoreCheck.warnings.length > 0) {
+          showImportRestoreWarnings(restoreCheck.warnings);
+        }
+
+        var quotaInfo = State.checkImportQuota(result.packageData);
+        if (quotaInfo.warningLevel !== "ok") {
+          showImportQuotaWarning(quotaInfo);
+        }
+
+        confirmImportBtn.style.display = "inline-flex";
+      } catch (e) {
+        if (e.isPackageError) {
+          showImportError(e.message, e.detail, e.code, e.resolution);
+        } else {
+          showImportError("导入失败", e.message || "未知错误");
+        }
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function handleConfirmImport() {
+    if (!pendingImportData) {
+      showImportError("导入失败", "没有可导入的数据，请重新选择文件。");
+      return;
+    }
+
+    var preValidation = State.preImportValidation(pendingImportData);
+    if (!preValidation.canProceed) {
+      var errorMsg = preValidation.errors.join("；");
+      var errorCode = preValidation.quotaOk ? Package.ERROR_CODES.VALIDATION_ERROR : Package.ERROR_CODES.STORAGE_QUOTA_EXCEEDED;
+      var resolution = preValidation.quotaOk ? null : Package.ERROR_RESOLUTIONS.STORAGE_QUOTA_EXCEEDED;
+      showImportError("导入前验证失败", errorMsg, errorCode, resolution);
+      pendingImportData = null;
+      return;
+    }
+
+    var result = State.restoreFromPackage(pendingImportData);
+
+    if (result.success) {
+      hideAllImportStates();
+      importSuccess.style.display = "flex";
+      if (importSuccessInfo) {
+        importSuccessInfo.textContent =
+          "已恢复 " + result.pageCount + " 页、" + result.markerCount + " 条标记" +
+          (result.projectTitle ? "（" + result.projectTitle + "）" : "");
+      }
+      confirmImportBtn.style.display = "none";
+      cancelImportBtn.textContent = "完成";
+
+      if (result.warnings && result.warnings.length > 0) {
+        showImportRestoreWarnings(result.warnings);
+      }
+
+      showToast("项目工作包导入成功，已恢复 " + result.pageCount + " 页数据", "success");
+
+      setTimeout(function () {
+        if (Render.viewerMode && Render.imageViewer) {
+          Render.imageViewer.fitToViewport();
+        }
+      }, 100);
+
+      setTimeout(function () {
+        closeImportModal();
+      }, 2500);
+    } else {
+      var rollbackMsg = result.rolledBack
+        ? "已自动回滚到导入前的状态（通过" + (result.rollbackMethod === "snapshot" ? "快照" : "备份") + "），当前数据未被修改。"
+        : result.backupWasCreated || result.snapshotWasCreated
+          ? "快照/备份已创建但回滚未完成，请检查数据完整性。"
+          : "当前数据未被修改。";
+
+      var resolution = result.isQuotaError
+        ? Package.ERROR_RESOLUTIONS.STORAGE_QUOTA_EXCEEDED
+        : result.preCheckFailed
+          ? "请确认工作包文件格式正确且数据完整。"
+          : Package.ERROR_RESOLUTIONS.RESTORE_FAILED;
+
+      showImportError(
+        "导入失败，" + rollbackMsg,
+        result.errorMessage,
+        result.isQuotaError ? Package.ERROR_CODES.STORAGE_QUOTA_EXCEEDED : Package.ERROR_CODES.RESTORE_FAILED,
+        resolution
+      );
+      showToast("导入失败，数据已回滚", "error", 4000);
+      pendingImportData = null;
+    }
   }
 
   function handleClearCurrent() {
     const page = State.currentPage;
     if (!page) {
-      alert("当前没有页面可清空。");
+      showToast("当前没有页面可清空", "warning");
       return;
     }
     if (!confirm("清空当前扫描页和全部标记？此操作不可撤销。")) return;
@@ -375,7 +845,7 @@
 
   function handleClearAll() {
     if (!State.hasPages) {
-      alert("当前没有卷册数据。");
+      showToast("当前没有卷册数据", "warning");
       return;
     }
     const total = State.getTotalMarkers();
@@ -392,6 +862,10 @@
       if (dragState) {
         event.preventDefault();
         cancelDrag();
+        return;
+      }
+      if (importModal && importModal.style.display !== "none") {
+        closeImportModal();
         return;
       }
     }
@@ -495,6 +969,56 @@
 
     reviewBtn.addEventListener("click", handleGoReview);
     exportBtn.addEventListener("click", handleExport);
+    importBtn.addEventListener("click", function () {
+      openImportModal();
+    });
+    importFileInput.addEventListener("change", function () {
+      if (importFileInput.files && importFileInput.files.length > 0) {
+        handleImportFile(importFileInput.files[0]);
+      }
+    });
+    importDropZoneBrowse.addEventListener("click", function (e) {
+      e.stopPropagation();
+      importFileInput.click();
+    });
+    importDropZone.addEventListener("click", function () {
+      importFileInput.click();
+    });
+    importDropZone.addEventListener("dragenter", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      importDropZone.classList.add("drag-over");
+    });
+    importDropZone.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    importDropZone.addEventListener("dragleave", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      importDropZone.classList.remove("drag-over");
+    });
+    importDropZone.addEventListener("drop", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      importDropZone.classList.remove("drag-over");
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) {
+        var file = files[0];
+        if (file.name && file.name.endsWith(".json")) {
+          importDropZone.classList.add("has-file");
+          handleImportFile(file);
+        } else {
+          showImportError("不支持的文件类型", "请拖入 .json 格式的工作包文件。");
+        }
+      }
+    });
+    closeImportBtn.addEventListener("click", closeImportModal);
+    cancelImportBtn.addEventListener("click", closeImportModal);
+    confirmImportBtn.addEventListener("click", handleConfirmImport);
+    importModal.addEventListener("click", function (e) {
+      if (e.target === importModal) closeImportModal();
+    });
     clearBtn.addEventListener("click", handleClearCurrent);
     clearAllBtn.addEventListener("click", handleClearAll);
 
@@ -526,9 +1050,23 @@
       if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         e.preventDefault();
         e.stopPropagation();
-        handleFiles(e.dataTransfer.files);
+        var droppedFiles = Array.from(e.dataTransfer.files);
+        var jsonFiles = droppedFiles.filter(function (f) {
+          return f.name && f.name.endsWith('.json');
+        });
+        var imageFiles = droppedFiles.filter(function (f) {
+          return f.type.startsWith('image/');
+        });
+        if (jsonFiles.length > 0 && imageFiles.length === 0) {
+          openImportModal();
+          handleImportFile(jsonFiles[0]);
+        } else {
+          handleFiles(e.dataTransfer.files);
+        }
       }
     });
+
+    exportIncludeImages.addEventListener("change", updateExportSummary);
   }
 
   function bootstrap() {
