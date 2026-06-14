@@ -493,6 +493,9 @@
       targetPageId: _calibrationData.targetPageId,
       sourcePoints: _calibrationData.sourcePoints ? _calibrationData.sourcePoints.slice() : [null, null, null, null],
       targetPoints: _calibrationData.targetPoints ? _calibrationData.targetPoints.slice() : [null, null, null, null],
+      migrationCandidates: _calibrationData.migrationCandidates ? _calibrationData.migrationCandidates.map(function (c) {
+        return Object.assign({}, c);
+      }) : [],
       transform: _calibrationData.transform,
       transformType: _calibrationData.transformType,
       quality: _calibrationData.quality,
@@ -508,6 +511,11 @@
     if (data.targetPageId) _calibrationData.targetPageId = data.targetPageId;
     if (data.sourcePoints) _calibrationData.sourcePoints = data.sourcePoints.slice();
     if (data.targetPoints) _calibrationData.targetPoints = data.targetPoints.slice();
+    if (data.migrationCandidates && Array.isArray(data.migrationCandidates)) {
+      _calibrationData.migrationCandidates = data.migrationCandidates.map(function (c) {
+        return Object.assign({}, c);
+      });
+    }
     if (data.transform) _calibrationData.transform = data.transform;
     if (data.transformType) _calibrationData.transformType = data.transformType;
     if (data.quality) _calibrationData.quality = data.quality;

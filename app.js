@@ -1236,16 +1236,24 @@
       prevPageId = State.pages[currentIndex - 1].id;
     }
 
-    if (calData.sourcePageId) {
-      calibSourcePage.value = calData.sourcePageId;
-    } else if (prevPageId) {
-      calibSourcePage.value = prevPageId;
+    var finalSourceId = calData.sourcePageId;
+    if (!finalSourceId && prevPageId) {
+      finalSourceId = prevPageId;
+      CalibrationUI.setSourcePage(finalSourceId);
+    }
+    if (finalSourceId) {
+      calibSourcePage.value = finalSourceId;
     }
 
-    if (calData.targetPageId) {
-      calibTargetPage.value = calData.targetPageId;
-    } else {
-      calibTargetPage.value = currentPageId || (pages.length > 0 ? pages[0].id : "");
+    var finalTargetId = calData.targetPageId;
+    if (!finalTargetId) {
+      finalTargetId = currentPageId || (pages.length > 0 ? pages[0].id : "");
+      if (finalTargetId) {
+        CalibrationUI.setTargetPage(finalTargetId);
+      }
+    }
+    if (finalTargetId) {
+      calibTargetPage.value = finalTargetId;
     }
   }
 
