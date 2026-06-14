@@ -5,6 +5,7 @@
   const Package = window.ProjectPackage;
   const CandidateDetector = window.CandidateDetector;
   const CandidateManager = window.CandidateManager;
+  const CalibrationUI = window.CalibrationUI;
 
   const imageInput = document.getElementById("imageInput");
   const noteInput = document.getElementById("noteInput");
@@ -28,6 +29,24 @@
   const applyAcceptedBtn = document.getElementById("applyAcceptedBtn");
   const candidateList = document.getElementById("candidateList");
   const candidateFilterTabs = document.getElementById("candidateFilterTabs");
+
+  const calibrationBtn = document.getElementById("calibrationBtn");
+  const calibrationModal = document.getElementById("calibrationModal");
+  const closeCalibrationBtn = document.getElementById("closeCalibrationBtn");
+  const closeCalibrationFooterBtn = document.getElementById("closeCalibrationFooterBtn");
+  const calibSourcePage = document.getElementById("calibSourcePage");
+  const calibTargetPage = document.getElementById("calibTargetPage");
+  const calibGenerateBtn = document.getElementById("calibGenerateBtn");
+  const calibResetBtn = document.getElementById("calibResetBtn");
+  const calibResult = document.getElementById("calibResult");
+  const calibMigrationSection = document.getElementById("calibMigrationSection");
+  const migrationList = document.getElementById("migrationList");
+  const migrPending = document.getElementById("migrPending");
+  const migrAccepted = document.getElementById("migrAccepted");
+  const migrRejected = document.getElementById("migrRejected");
+  const migrAcceptAllBtn = document.getElementById("migrAcceptAllBtn");
+  const migrRejectAllBtn = document.getElementById("migrRejectAllBtn");
+  const migrApplyBtn = document.getElementById("migrApplyBtn");
 
   const importModal = document.getElementById("importModal");
   const importError = document.getElementById("importError");
@@ -193,29 +212,49 @@
   }
 
   function handleStageClick(event) {
+    if (CalibrationUI && CalibrationUI.isPicking()) {
+      event.stopPropagation();
+      var picking = CalibrationUI.getPickingInfo();
+      var calData = CalibrationUI.getCalibration();
+      var page = State.currentPage;
+      if (!page || !page.image) return;
+
+      var needSwitch = (picking.side === "source" && calData.sourcePageId && calData.sourcePageId !== page.id)
+        || (picking.side === "target" && calData.targetPageId && calData.targetPageId !== page.id);
+
+      var coords = computeCoords(event.clientX, event.clientY);
+      CalibrationUI.setCalibrationPoint(picking.side, picking.index, coords.x, coords.y);
+      CalibrationUI.stopPicking();
+      document.body.classList.remove("calibration-picking");
+      updateCalibrationPointDisplay();
+      Render.refresh();
+      showToast("已设置校准点 " + (picking.side === "source" ? "S" : "T") + (picking.index + 1), "success");
+      return;
+    }
+
     if (currentMode !== "point") return;
     if (event.target.closest("button, [data-marker]")) return;
 
-    const page = State.currentPage;
-    if (!page || !page.image) return;
+    const currentPage = State.currentPage;
+    if (!currentPage || !currentPage.image) return;
 
     if (Render.viewerMode && Render.imageViewer && Render.imageViewer.checkAndClearPanClick()) {
       return;
     }
 
-    const coords = computeCoords(event.clientX, event.clientY);
+    const clickCoords = computeCoords(event.clientX, event.clientY);
     const selectedTypeId = Render.getSelectedTypeId();
 
     const markerData = {
       typeId: selectedTypeId,
       note: noteInput.value,
-      x: coords.x,
-      y: coords.y,
+      x: clickCoords.x,
+      y: clickCoords.y,
     };
 
-    if (coords.realX !== undefined) {
-      markerData.realX = coords.realX;
-      markerData.realY = coords.realY;
+    if (clickCoords.realX !== undefined) {
+      markerData.realX = clickCoords.realX;
+      markerData.realY = clickCoords.realY;
     }
 
     const marker = State.addMarker(markerData);
@@ -812,6 +851,13 @@
 
       showToast("项目工作包导入成功，已恢复 " + result.pageCount + " 页数据", "success");
 
+      if (CalibrationUI && pendingImportData && pendingImportData.calibrationSessions && pendingImportData.calibrationSessions.length > 0) {
+        var latestSession = pendingImportData.calibrationSessions[0];
+        if (latestSession && latestSession.data) {
+          CalibrationUI.restoreExportData(latestSession.data);
+        }
+      }
+
       setTimeout(function () {
         if (Render.viewerMode && Render.imageViewer) {
           Render.imageViewer.fitToViewport();
@@ -879,6 +925,12 @@
 
   function handleKeyboard(event) {
     if (event.key === "Escape") {
+      if (CalibrationUI && CalibrationUI.isPicking()) {
+        CalibrationUI.stopPicking();
+        document.body.classList.remove("calibration-picking");
+        Render.refresh();
+        return;
+      }
       if (dragState) {
         event.preventDefault();
         cancelDrag();
@@ -886,6 +938,10 @@
       }
       if (importModal && importModal.style.display !== "none") {
         closeImportModal();
+        return;
+      }
+      if (calibrationModal && calibrationModal.style.display !== "none") {
+        closeCalibrationModal();
         return;
       }
     }
@@ -1140,6 +1196,243 @@
     }
   }
 
+  function openCalibrationModal() {
+    if (!CalibrationUI) {
+      showToast("校准模块未加载", "error");
+      return;
+    }
+    if (State.pages.length < 2) {
+      showToast("至少需要 2 个页面才能使用跨页校准", "warning");
+      return;
+    }
+    populateCalibPageSelects();
+    updateCalibrationPointDisplay();
+    updateMigrationUI();
+    calibrationModal.style.display = "flex";
+  }
+
+  function closeCalibrationModal() {
+    if (CalibrationUI) CalibrationUI.stopPicking();
+    document.body.classList.remove("calibration-picking");
+    calibrationModal.style.display = "none";
+  }
+
+  function populateCalibPageSelects() {
+    var pages = State.pages;
+    var calData = CalibrationUI.getCalibration();
+    var options = pages.map(function (p, i) {
+      var name = p.name || p.fileName || ("第 " + (i + 1) + " 页");
+      var count = p.markers ? p.markers.length : 0;
+      return '<option value="' + p.id + '">' + escapeHtmlSimple(name) + ' (' + count + ' 条标记)</option>';
+    }).join("");
+
+    calibSourcePage.innerHTML = options;
+    calibTargetPage.innerHTML = options;
+
+    var currentPageId = State.currentPageId;
+    var prevPageId = null;
+    var currentIndex = State.currentIndex;
+    if (currentIndex > 0) {
+      prevPageId = State.pages[currentIndex - 1].id;
+    }
+
+    if (calData.sourcePageId) {
+      calibSourcePage.value = calData.sourcePageId;
+    } else if (prevPageId) {
+      calibSourcePage.value = prevPageId;
+    }
+
+    if (calData.targetPageId) {
+      calibTargetPage.value = calData.targetPageId;
+    } else {
+      calibTargetPage.value = currentPageId || (pages.length > 0 ? pages[0].id : "");
+    }
+  }
+
+  function updateCalibrationPointDisplay() {
+    if (!CalibrationUI) return;
+    var calData = CalibrationUI.getCalibration();
+    for (var i = 0; i < 4; i++) {
+      var srcEl = document.getElementById("calibSrc" + i);
+      var dstEl = document.getElementById("calibDst" + i);
+      if (srcEl) {
+        srcEl.textContent = calData.sourcePoints[i]
+          ? "(" + calData.sourcePoints[i].x + ", " + calData.sourcePoints[i].y + ")"
+          : "未选取";
+      }
+      if (dstEl) {
+        dstEl.textContent = calData.targetPoints[i]
+          ? "(" + calData.targetPoints[i].x + ", " + calData.targetPoints[i].y + ")"
+          : "未选取";
+      }
+    }
+  }
+
+  function handleCalibPick(side, index) {
+    if (!CalibrationUI) return;
+    CalibrationUI.startPicking(side, index);
+    document.body.classList.add("calibration-picking");
+
+    var calData = CalibrationUI.getCalibration();
+    var targetPageId = null;
+    if (side === "source" && calData.sourcePageId) {
+      targetPageId = calData.sourcePageId;
+    } else if (side === "target" && calData.targetPageId) {
+      targetPageId = calData.targetPageId;
+    }
+
+    if (targetPageId && targetPageId !== State.currentPageId) {
+      State.switchPage(targetPageId);
+    }
+
+    showToast("请在页面上点击选取校准点 " + (side === "source" ? "S" : "T") + (index + 1), "info");
+  }
+
+  function handleCalibGenerate() {
+    if (!CalibrationUI) return;
+    var result = CalibrationUI.computeAndGenerateCandidates();
+    if (result.success) {
+      calibResult.textContent = "变换计算成功！生成了 " + result.count + " 个迁移候选标记，请逐条确认。";
+      calibResult.className = "calib-result success";
+      calibResult.style.display = "block";
+      calibMigrationSection.style.display = "block";
+      updateMigrationUI();
+      Render.refresh();
+      showToast("已生成 " + result.count + " 个迁移候选", "success");
+    } else {
+      calibResult.textContent = result.error;
+      calibResult.className = "calib-result error";
+      calibResult.style.display = "block";
+      showToast(result.error, "error");
+    }
+  }
+
+  function handleCalibReset() {
+    if (!CalibrationUI) return;
+    if (!confirm("确认重置所有校准点和迁移候选？")) return;
+    CalibrationUI.resetCalibration();
+    calibResult.style.display = "none";
+    calibMigrationSection.style.display = "none";
+    updateCalibrationPointDisplay();
+    Render.refresh();
+    showToast("校准数据已重置", "info");
+  }
+
+  function updateMigrationUI() {
+    if (!CalibrationUI) return;
+    var stats = CalibrationUI.getStats();
+    if (migrPending) migrPending.textContent = stats.pending;
+    if (migrAccepted) migrAccepted.textContent = stats.accepted;
+    if (migrRejected) migrRejected.textContent = stats.rejected;
+
+    if (stats.total > 0) {
+      calibMigrationSection.style.display = "block";
+    }
+
+    renderMigrationList();
+  }
+
+  function renderMigrationList() {
+    if (!CalibrationUI || !migrationList) return;
+    var candidates = CalibrationUI.getMigrationCandidates();
+    if (candidates.length === 0) {
+      migrationList.innerHTML = '<div class="candidate-empty">暂无迁移候选</div>';
+      return;
+    }
+
+    var damageTypes = State.damageTypes;
+    migrationList.innerHTML = candidates.map(function (c) {
+      var status = c.status || "pending";
+      var typeInfo = State.findTypeById(c.typeId) || { name: c.type || "未知" };
+      var isRegion = c.mode === "region";
+      var coords = "(" + c.x + ", " + c.y + ")";
+      var sizeInfo = isRegion ? " " + c.width + "%×" + c.height + "%" : "";
+
+      var typeOptions = damageTypes.map(function (t) {
+        return '<option value="' + t.id + '"' + (t.id === c.typeId ? ' selected' : '') + '>' + escapeHtmlSimple(t.name) + '</option>';
+      }).join("");
+
+      var actions = "";
+      if (status === "pending") {
+        actions = '<button class="migr-action-btn accept" data-migr-action="accept" data-migr-id="' + c.id + '" title="接受">✓</button>' +
+          '<button class="migr-action-btn reject" data-migr-action="reject" data-migr-id="' + c.id + '" title="拒绝">✗</button>' +
+          '<button class="migr-action-btn delete" data-migr-action="delete" data-migr-id="' + c.id + '" title="删除">🗑</button>';
+      } else if (status === "accepted") {
+        actions = '<button class="migr-action-btn reset" data-migr-action="reset" data-migr-id="' + c.id + '" title="重置">↺</button>' +
+          '<button class="migr-action-btn delete" data-migr-action="delete" data-migr-id="' + c.id + '" title="删除">🗑</button>';
+      } else {
+        actions = '<button class="migr-action-btn reset" data-migr-action="reset" data-migr-id="' + c.id + '" title="重置">↺</button>' +
+          '<button class="migr-action-btn delete" data-migr-action="delete" data-migr-id="' + c.id + '" title="删除">🗑</button>';
+      }
+
+      return '<div class="migration-item ' + status + '" data-migration-id="' + c.id + '">' +
+        '<span class="migr-item-indicator ' + status + '"></span>' +
+        '<div class="migr-item-body">' +
+          '<div class="migr-item-title">' + (isRegion ? "[区域] " : "") + escapeHtmlSimple(typeInfo.name) + sizeInfo + '</div>' +
+          '<div class="migr-item-coords">' + coords + '</div>' +
+        '</div>' +
+        '<select class="migr-item-type-select" data-migr-type-id="' + c.id + '">' + typeOptions + '</select>' +
+        '<div class="migr-item-actions">' + actions + '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  function handleMigrationAction(candidateId, action) {
+    if (!CalibrationUI) return;
+    switch (action) {
+      case "accept":
+        CalibrationUI.acceptCandidate(candidateId);
+        break;
+      case "reject":
+        CalibrationUI.rejectCandidate(candidateId);
+        break;
+      case "delete":
+        CalibrationUI.deleteCandidate(candidateId);
+        break;
+      case "reset":
+        CalibrationUI.resetCandidate(candidateId);
+        break;
+    }
+    updateMigrationUI();
+    Render.refresh();
+  }
+
+  function handleMigrAcceptAll() {
+    if (!CalibrationUI) return;
+    var count = CalibrationUI.acceptAllPending();
+    if (count > 0) {
+      showToast("已接受 " + count + " 个候选", "success");
+    } else {
+      showToast("没有待确认的候选", "info");
+    }
+    updateMigrationUI();
+    Render.refresh();
+  }
+
+  function handleMigrRejectAll() {
+    if (!CalibrationUI) return;
+    var count = CalibrationUI.rejectAllPending();
+    if (count > 0) {
+      showToast("已拒绝 " + count + " 个候选", "info");
+    } else {
+      showToast("没有待确认的候选", "info");
+    }
+    updateMigrationUI();
+    Render.refresh();
+  }
+
+  function handleMigrApply() {
+    if (!CalibrationUI) return;
+    var result = CalibrationUI.applyAccepted();
+    if (result.added > 0) {
+      showToast("已应用 " + result.added + " 条迁移标记到目标页面", "success");
+      updateMigrationUI();
+      Render.refresh();
+    } else {
+      showToast("没有已接受的候选可应用", "warning");
+    }
+  }
+
   function bindEvents() {
     imageInput.addEventListener("change", () => {
       handleFiles(imageInput.files);
@@ -1350,6 +1643,75 @@
       candidateToggleBtn.addEventListener("click", toggleCandidates);
     }
 
+    if (calibrationBtn) {
+      calibrationBtn.addEventListener("click", openCalibrationModal);
+    }
+    if (closeCalibrationBtn) {
+      closeCalibrationBtn.addEventListener("click", closeCalibrationModal);
+    }
+    if (closeCalibrationFooterBtn) {
+      closeCalibrationFooterBtn.addEventListener("click", closeCalibrationModal);
+    }
+    if (calibrationModal) {
+      calibrationModal.addEventListener("click", function (e) {
+        if (e.target === calibrationModal) closeCalibrationModal();
+      });
+    }
+    if (calibSourcePage) {
+      calibSourcePage.addEventListener("change", function () {
+        if (CalibrationUI) CalibrationUI.setSourcePage(calibSourcePage.value);
+      });
+    }
+    if (calibTargetPage) {
+      calibTargetPage.addEventListener("change", function () {
+        if (CalibrationUI) CalibrationUI.setTargetPage(calibTargetPage.value);
+      });
+    }
+
+    document.querySelectorAll(".calib-pick-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var parts = btn.dataset.pick.split("-");
+        if (parts.length === 2) {
+          handleCalibPick(parts[0], parseInt(parts[1], 10));
+        }
+      });
+    });
+
+    if (calibGenerateBtn) {
+      calibGenerateBtn.addEventListener("click", handleCalibGenerate);
+    }
+    if (calibResetBtn) {
+      calibResetBtn.addEventListener("click", handleCalibReset);
+    }
+    if (migrAcceptAllBtn) {
+      migrAcceptAllBtn.addEventListener("click", handleMigrAcceptAll);
+    }
+    if (migrRejectAllBtn) {
+      migrRejectAllBtn.addEventListener("click", handleMigrRejectAll);
+    }
+    if (migrApplyBtn) {
+      migrApplyBtn.addEventListener("click", handleMigrApply);
+    }
+    if (migrationList) {
+      migrationList.addEventListener("click", function (e) {
+        var actionBtn = e.target.closest("[data-migr-action]");
+        if (actionBtn) {
+          e.stopPropagation();
+          var id = actionBtn.dataset.migrId;
+          var action = actionBtn.dataset.migrAction;
+          handleMigrationAction(id, action);
+        }
+      });
+      migrationList.addEventListener("change", function (e) {
+        var select = e.target.closest("[data-migr-type-id]");
+        if (select && CalibrationUI) {
+          CalibrationUI.modifyCandidateType(select.dataset.migrTypeId, select.value);
+          updateMigrationUI();
+          Render.refresh();
+        }
+      });
+    }
+
     State.subscribe(() => {
       handlePageChange();
     });
@@ -1360,6 +1722,9 @@
     Render.init();
     if (CandidateManager) {
       CandidateManager.init();
+    }
+    if (CalibrationUI) {
+      CalibrationUI.init();
     }
     bindEvents();
     setMode("point");

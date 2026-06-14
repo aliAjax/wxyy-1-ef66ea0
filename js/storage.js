@@ -99,6 +99,17 @@
       y: Number(Number(m.y).toFixed(2)),
       createdAt: m.createdAt || new Date().toISOString(),
     };
+    if (m.migrated) {
+      base.migrated = true;
+      if (m.sourceMarkerId) base.sourceMarkerId = m.sourceMarkerId;
+      if (m.migratedFrom) base.migratedFrom = m.migratedFrom;
+    }
+    if (m.transformType) {
+      base.transformType = m.transformType;
+    }
+    if (m.positionAdjusted) {
+      base.positionAdjusted = true;
+    }
     if (m.realX !== undefined && m.realY !== undefined) {
       base.realX = Number(Number(m.realX).toFixed(2));
       base.realY = Number(Number(m.realY).toFixed(2));
@@ -152,6 +163,14 @@
       !state.pages.find((p) => p.id === state.currentPageId)
     ) {
       state.currentPageId = state.pages[0].id;
+    }
+
+    if (raw.calibrationSessions && Array.isArray(raw.calibrationSessions)) {
+      state.calibrationSessions = raw.calibrationSessions.filter(function (s) {
+        return s && s.id && s.data;
+      });
+    } else {
+      state.calibrationSessions = [];
     }
 
     return state;
@@ -531,6 +550,10 @@
         p.markers.some((m) => m.realX !== undefined)
       );
 
+      const hasMigratedMarkers = pages.some((p) =>
+        p.markers.some((m) => m.migrated)
+      );
+
       const result = {
         format: "archive-volume-damage",
         formatVersion: "2.1",
@@ -551,6 +574,11 @@
       if (hasRealCoords) {
         result.coordSystem = "dual";
         result.coordNote = "同时包含百分比坐标(x,y)和真实像素坐标(realX,realY)";
+      }
+
+      if (hasMigratedMarkers) {
+        result.hasMigratedMarkers = true;
+        result.migrationNote = "部分标记通过跨页校准迁移而来，包含migrated/sourceMarkerId/migratedFrom字段";
       }
 
       return result;

@@ -33,6 +33,10 @@
     return (marker.note || '').trim();
   }
 
+  function isMigratedMarker(marker) {
+    return marker && marker.migrated === true;
+  }
+
   function normalizeMarkers(markers) {
     if (!Array.isArray(markers)) return [];
     return markers.map((m) => ({
@@ -40,6 +44,7 @@
       _center: getMarkerCenter(m),
       _type: getMarkerType(m),
       _note: getMarkerNote(m),
+      _migrated: isMigratedMarker(m),
     }));
   }
 
@@ -154,6 +159,11 @@
 
   function getStatistics(results) {
     const groups = groupByType(results);
+    let migratedA = 0, migratedB = 0;
+    results.forEach((r) => {
+      if (r.markerA && r.markerA.migrated) migratedA++;
+      if (r.markerB && r.markerB.migrated) migratedB++;
+    });
     return {
       total: results.length,
       match: groups[DIFF_TYPES.MATCH].length,
@@ -163,6 +173,8 @@
       noteMismatch: groups[DIFF_TYPES.NOTE_MISMATCH].length,
       aTotal: results.filter((r) => r.markerA).length,
       bTotal: results.filter((r) => r.markerB).length,
+      migratedA: migratedA,
+      migratedB: migratedB,
       consistency: results.length > 0
         ? Math.round((groups[DIFF_TYPES.MATCH].length / results.length) * 100)
         : 0,
@@ -287,6 +299,7 @@
     validatePackage,
     getMarkerCenter,
     calculateDistance,
+    isMigratedMarker,
   };
 
   global.DiffCompare = DiffCompare;

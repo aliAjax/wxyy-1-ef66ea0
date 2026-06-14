@@ -29,6 +29,8 @@
     detailSize: null,
     detailTime: null,
     detailNote: null,
+    migrationInfoRow: null,
+    detailMigration: null,
     reviewComment: null,
     currentReviewStatus: null,
     exportBtn: null,
@@ -63,6 +65,8 @@
     Doms.detailSize = document.getElementById("detailSize");
     Doms.detailTime = document.getElementById("detailTime");
     Doms.detailNote = document.getElementById("detailNote");
+    Doms.migrationInfoRow = document.getElementById("migrationInfoRow");
+    Doms.detailMigration = document.getElementById("detailMigration");
     Doms.reviewComment = document.getElementById("reviewComment");
     Doms.currentReviewStatus = document.getElementById("currentReviewStatus");
     Doms.exportBtn = document.getElementById("exportBtn");
@@ -170,6 +174,9 @@
         const modeTag = isRegion
           ? '<span class="record-mode mode-region">区域</span>'
           : '<span class="record-mode mode-point">点</span>';
+        const migrTag = record.migrated
+          ? '<span class="record-mode mode-migrated">迁移</span>'
+          : '';
         const coords = isRegion
           ? `${record.x}%, ${record.y}% (${record.width}% × ${record.height}%)`
           : `${record.x}%, ${record.y}%`;
@@ -184,7 +191,7 @@
               <span class="status-badge ${statusClass}">${statusLabel}</span>
             </div>
             <div class="record-body">
-              <strong><span class="stat-dot" style="background:${escapeHtml(record.typeColor)};"></span>${escapeHtml(record.type)}${modeTag}</strong>
+              <strong><span class="stat-dot" style="background:${escapeHtml(record.typeColor)};"></span>${escapeHtml(record.type)}${modeTag}${migrTag}</strong>
               <p class="record-page">${escapeHtml(record.pageName)}</p>
               <p class="record-coords">${coords}</p>
               <p class="record-note">${note}</p>
@@ -206,6 +213,7 @@
       Doms.recordIndicator.textContent = "0 / 0";
       Doms.prevRecord.disabled = true;
       Doms.nextRecord.disabled = true;
+      if (Doms.migrationInfoRow) Doms.migrationInfoRow.style.display = "none";
       return;
     }
 
@@ -218,13 +226,43 @@
     Doms.detailIndex.textContent = `#${flatIdx}（筛选后第 ${currentIdx + 1} 条）`;
     Doms.detailPage.textContent = record.pageName;
     Doms.detailType.innerHTML = `<span class="stat-dot" style="background:${escapeHtml(record.typeColor)};"></span>${escapeHtml(record.type)}`;
-    Doms.detailMode.textContent = isRegion ? "区域标注" : "点标记";
+    var modeLabel = isRegion ? "区域标注" : "点标记";
+    if (record.migrated) modeLabel += "（跨页迁移）";
+    Doms.detailMode.textContent = modeLabel;
     Doms.detailCoords.textContent = `X: ${record.x}%, Y: ${record.y}%`;
     Doms.detailSize.textContent = isRegion
       ? `宽度: ${record.width}%, 高度: ${record.height}%`
       : "—";
     Doms.detailTime.textContent = formatDateTime(record.createdAt);
     Doms.detailNote.textContent = record.note || "无";
+
+    if (Doms.migrationInfoRow && Doms.detailMigration) {
+      if (record.migrated) {
+        Doms.migrationInfoRow.style.display = "flex";
+        var parts = [];
+        if (record.migratedFrom) {
+          var srcPage = State.pages.find((p) => p.id === record.migratedFrom);
+          var srcPageName = srcPage
+            ? (srcPage.name || srcPage.fileName || srcPage.id)
+            : record.migratedFrom;
+          parts.push("来源页面：" + srcPageName);
+        }
+        if (record.sourceMarkerId) {
+          parts.push("源标记ID：" + record.sourceMarkerId.slice(0, 8) + "…");
+        }
+        if (record.transformType) {
+          parts.push("变换方式：" + (record.transformType === "homography" ? "单应性透视" : "仿射变换"));
+        }
+        if (record.positionAdjusted) {
+          parts.push("已手动调整位置");
+        }
+        Doms.detailMigration.innerHTML = parts.length > 0
+          ? parts.map((p) => escapeHtml(p)).join("<br />")
+          : "通过跨页校准迁移生成";
+      } else {
+        Doms.migrationInfoRow.style.display = "none";
+      }
+    }
 
     if (Doms.reviewComment.value !== record.review.comment) {
       Doms.reviewComment.value = record.review.comment || "";

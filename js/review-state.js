@@ -98,6 +98,13 @@
       base.width = Number(Number(m.width || 0).toFixed(2));
       base.height = Number(Number(m.height || 0).toFixed(2));
     }
+    if (m.migrated) {
+      base.migrated = true;
+      if (m.sourceMarkerId) base.sourceMarkerId = m.sourceMarkerId;
+      if (m.migratedFrom) base.migratedFrom = m.migratedFrom;
+      if (m.transformType) base.transformType = m.transformType;
+      if (m.positionAdjusted) base.positionAdjusted = true;
+    }
     return base;
   }
 
@@ -130,7 +137,7 @@
     const records = [];
     pages.forEach((page, pageIdx) => {
       page.markers.forEach((marker, markerIdx) => {
-        records.push({
+        const rec = {
           id: marker.id,
           pageId: page.id,
           pageIndex: pageIdx,
@@ -148,7 +155,15 @@
           note: marker.note,
           createdAt: marker.createdAt,
           review: marker.review,
-        });
+        };
+        if (marker.migrated) {
+          rec.migrated = true;
+          if (marker.sourceMarkerId) rec.sourceMarkerId = marker.sourceMarkerId;
+          if (marker.migratedFrom) rec.migratedFrom = marker.migratedFrom;
+          if (marker.transformType) rec.transformType = marker.transformType;
+          if (marker.positionAdjusted) rec.positionAdjusted = true;
+        }
+        records.push(rec);
       });
     });
     return records;
@@ -158,7 +173,8 @@
     if (!data || typeof data !== "object") {
       return { valid: false, error: "数据格式错误" };
     }
-    if (!data.format || data.format !== "archive-volume-damage") {
+    const validFormats = ["archive-volume-damage", "archive-project-package"];
+    if (!data.format || !validFormats.includes(data.format)) {
       return { valid: false, error: "不是有效的古籍损伤标记数据文件" };
     }
     if (!data.pages || !Array.isArray(data.pages)) {
@@ -277,9 +293,18 @@
         const pages = initializeReviews(rawData.pages, damageTypes);
         this._state.sourceData = structuredClone(rawData);
         this._state.damageTypes = damageTypes;
-        this._state.volume = rawData.volume
-          ? structuredClone(rawData.volume)
-          : null;
+        if (rawData.volume) {
+          this._state.volume = structuredClone(rawData.volume);
+        } else if (rawData.project) {
+          this._state.volume = {
+            id: rawData.project.id || "",
+            title: rawData.project.title || "",
+            createdAt: rawData.project.createdAt,
+            updatedAt: rawData.project.updatedAt,
+          };
+        } else {
+          this._state.volume = null;
+        }
         this._state.pages = pages;
         this._state.flatRecords = buildFlatRecords(pages);
         this._state.currentRecordIndex =
@@ -423,31 +448,46 @@
           typeof p.imageIncluded === "boolean"
             ? p.imageIncluded
             : Boolean(p.image),
-        markers: p.markers.map((m) => ({
-          id: m.id,
-          typeId: m.typeId,
-          type: m.type,
-          mode: m.mode,
-          note: m.note,
-          x: m.x,
-          y: m.y,
-          ...(m.mode === "region"
-            ? { width: m.width, height: m.height }
-            : {}),
-          createdAt: m.createdAt,
-          review: {
-            status: m.review.status,
-            comment: m.review.comment,
-            reviewedAt: m.review.reviewedAt,
-          },
-        })),
+        markers: p.markers.map((m) => {
+          const mk = {
+            id: m.id,
+            typeId: m.typeId,
+            type: m.type,
+            mode: m.mode,
+            note: m.note,
+            x: m.x,
+            y: m.y,
+            ...(m.mode === "region"
+              ? { width: m.width, height: m.height }
+              : {}),
+            createdAt: m.createdAt,
+            review: {
+              status: m.review.status,
+              comment: m.review.comment,
+              reviewedAt: m.review.reviewedAt,
+            },
+          };
+          if (m.migrated) {
+            mk.migrated = true;
+            if (m.sourceMarkerId) mk.sourceMarkerId = m.sourceMarkerId;
+            if (m.migratedFrom) mk.migratedFrom = m.migratedFrom;
+            if (m.transformType) mk.transformType = m.transformType;
+            if (m.positionAdjusted) mk.positionAdjusted = true;
+          }
+          return mk;
+        }),
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
       }));
 
       const reviewStats = this.stats;
 
-      const volume = source.volume ? structuredClone(source.volume) : null;
+      let volume = null;
+      if (source.volume) {
+        volume = structuredClone(source.volume);
+      } else if (source.project) {
+        volume = structuredClone(source.project);
+      }
       if (volume) {
         volume.reviewStats = {
           total: reviewStats.total,
@@ -459,14 +499,22 @@
         };
       }
 
+      const migratedCount = this._state.flatRecords.filter((r) => r.migrated).length;
+
       return {
-        format: "archive-volume-damage",
-        formatVersion: "2.1",
+        format: "archive-project-package",
+        formatVersion: "5.0",
         exportedAt: new Date().toISOString(),
         reviewedAt: new Date().toISOString(),
         damageTypes,
         volume,
         pages,
+        summary: {
+          pageCount: pages.length,
+          totalMarkers: this._state.flatRecords.length,
+          migratedMarkers: migratedCount,
+          reviewedMarkers: reviewStats.total - reviewStats.pending,
+        },
       };
     },
   };

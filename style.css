@@ -145,6 +145,26 @@ button.danger:hover {
   background: #fdf2f2;
 }
 
+.topbar-link {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  min-height: 40px;
+  padding: 0 14px;
+  cursor: pointer;
+  text-decoration: none;
+  font: inherit;
+  font-size: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.topbar-link:hover {
+  border-color: var(--accent);
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 220px 240px minmax(360px, 1fr) 300px;
@@ -3529,4 +3549,1139 @@ button.primary:hover {
     grid-row: 1;
     order: 2;
   }
+}
+
+.migration-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.migration-candidate {
+  position: absolute;
+  border: 2px dotted;
+  border-radius: 3px;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.75;
+}
+
+.migration-candidate.pending {
+  border-color: #5b7fa3;
+  background: rgba(91, 127, 163, 0.2);
+}
+
+.migration-candidate.accepted {
+  border-color: #4caf50;
+  background: rgba(76, 175, 80, 0.2);
+  border-style: solid;
+  opacity: 0.85;
+}
+
+.migration-candidate.rejected {
+  border-color: #9e9e9e;
+  background: rgba(158, 158, 158, 0.1);
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+.migration-candidate:hover {
+  opacity: 1;
+  transform: scale(1.02);
+  z-index: 20;
+}
+
+.migration-candidate.point {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border-width: 2px;
+}
+
+.migration-candidate.point .migr-badge {
+  display: none;
+}
+
+.migration-candidate .migr-badge {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 0 0 3px 0;
+  color: #fff;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.migration-candidate.pending .migr-badge {
+  background: #5b7fa3;
+}
+
+.migration-candidate.accepted .migr-badge {
+  background: #4caf50;
+}
+
+.migration-candidate.rejected .migr-badge {
+  background: #9e9e9e;
+}
+
+.calibration-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.calib-point {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  z-index: 15;
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.calib-point:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.calib-point.active {
+  transform: translate(-50%, -50%) scale(1.3);
+  box-shadow: 0 0 0 4px rgba(91, 127, 163, 0.5), 0 2px 12px rgba(0, 0, 0, 0.5);
+  animation: calib-pulse 1s ease infinite;
+}
+
+.calib-point.source {
+  background: #e65100;
+  border: 2px solid #fff;
+}
+
+.calib-point.target {
+  background: #1565c0;
+  border: 2px solid #fff;
+}
+
+.calib-point-label {
+  line-height: 1;
+}
+
+@keyframes calib-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(91, 127, 163, 0.5), 0 2px 12px rgba(0, 0, 0, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(91, 127, 163, 0.3), 0 2px 12px rgba(0, 0, 0, 0.5); }
+}
+
+.marker.migrated {
+  border-style: dashed;
+  border-width: 3px;
+}
+
+.region-marker.migrated {
+  border-style: dashed;
+  border-width: 3px;
+}
+
+.record-mode.mode-migrated {
+  background: rgba(91, 127, 163, 0.15);
+  color: #5b7fa3;
+}
+
+.calib-page-select {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.calib-page-field {
+  display: grid;
+  gap: 4px;
+}
+
+.calib-page-field span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.calib-page-field select {
+  padding: 8px;
+  font-size: 13px;
+}
+
+.calib-points-section {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.calib-points-section h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.calib-points-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.calib-points-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.calib-points-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calib-column-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  text-align: center;
+}
+
+.calib-point-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+}
+
+.calib-point-num {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink);
+  min-width: 20px;
+}
+
+.calib-point-coord {
+  flex: 1;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.calib-pick-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  min-height: 24px;
+}
+
+.calib-actions-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.calib-result {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf8;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.calib-result.success {
+  border-color: #81c784;
+  background: rgba(76, 175, 80, 0.06);
+  color: #2e7d32;
+}
+
+.calib-result.error {
+  border-color: #e8a5a5;
+  background: rgba(168, 50, 50, 0.06);
+  color: var(--danger);
+}
+
+.calib-migration-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.calib-migration-section h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.calib-migration-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.calib-migration-batch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.migration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.migration-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fffdf8;
+  transition: all 0.15s;
+}
+
+.migration-item.accepted {
+  border-color: #81c784;
+  background: rgba(76, 175, 80, 0.06);
+}
+
+.migration-item.rejected {
+  opacity: 0.5;
+}
+
+.migr-item-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.migr-item-indicator.pending {
+  background: #5b7fa3;
+}
+
+.migr-item-indicator.accepted {
+  background: #4caf50;
+}
+
+.migr-item-indicator.rejected {
+  background: #9e9e9e;
+}
+
+.migr-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.migr-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.migr-item-coords {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+}
+
+.migr-item-type-select {
+  padding: 2px 4px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  max-width: 80px;
+}
+
+.migr-item-actions {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.migr-action-btn {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.migr-action-btn.accept:hover {
+  background: #4caf50;
+  color: #fff;
+  border-color: #4caf50;
+}
+
+.migr-action-btn.reject:hover {
+  background: #9e9e9e;
+  color: #fff;
+  border-color: #9e9e9e;
+}
+
+.migr-action-btn.delete:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.migr-action-btn.reset:hover {
+  background: #ff9800;
+  color: #fff;
+  border-color: #ff9800;
+}
+
+body.calibration-picking {
+  cursor: crosshair !important;
+}
+
+body.calibration-picking * {
+  cursor: crosshair !important;
+}
+
+body.calibration-app {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  min-height: 100vh;
+}
+
+.calibration-app .calib-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--parchment);
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.calibration-app .calib-topbar h1 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--ink);
+}
+
+.calibration-app .calib-topbar .back-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.calibration-app .calib-topbar .back-link:hover {
+  text-decoration: underline;
+}
+
+.calibration-app .calib-dual-panel {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px;
+  min-height: 60vh;
+}
+
+.calibration-app .calib-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.calibration-app .calib-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--parchment);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.calibration-app .calib-panel-header .label {
+  min-width: 48px;
+}
+
+.calibration-app .calib-panel-header select {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.calibration-app .calib-image-container {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  background: #f5f0e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.calibration-app .calib-image-container img {
+  max-width: 100%;
+  max-height: 60vh;
+  display: block;
+}
+
+.calibration-app .calib-image-container .empty-state {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.calibration-app .calib-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.calibration-app .calib-overlay.picking-active {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.calibration-app .calib-point-indicator {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  z-index: 10;
+}
+
+.calibration-app .calib-point-indicator.source {
+  background: #e67e22;
+}
+
+.calibration-app .calib-point-indicator.target {
+  background: #3498db;
+}
+
+.calibration-app .calib-point-indicator.active {
+  animation: calib-pulse 1s infinite;
+}
+
+@keyframes calib-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.6); }
+  50% { box-shadow: 0 0 0 8px rgba(230, 126, 34, 0); }
+}
+
+.calibration-app .calib-source-marker {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  transform: translate(-50%, -50%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.calibration-app .calib-migration-cand {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.calibration-app .calib-migration-cand.pending {
+  background: #3498db;
+}
+
+.calibration-app .calib-migration-cand.accepted {
+  background: #27ae60;
+}
+
+.calibration-app .calib-migration-cand.rejected {
+  background: #95a5a6;
+  opacity: 0.5;
+}
+
+.calibration-app .calib-controls {
+  padding: 16px 24px;
+}
+
+.calibration-app .calib-points-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.calibration-app .calib-points-group {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fff;
+}
+
+.calibration-app .calib-points-group h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.calibration-app .calib-points-group.source h3 {
+  color: #e67e22;
+}
+
+.calibration-app .calib-points-group.target h3 {
+  color: #3498db;
+}
+
+.calibration-app .calib-step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px;
+}
+
+.calibration-app .calib-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.calibration-app .calib-step.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.calibration-app .calib-step.done {
+  color: #27ae60;
+}
+
+.calibration-app .calib-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.calibration-app .calib-step.active .calib-step-num {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.calibration-app .calib-step.done .calib-step-num {
+  background: #27ae60;
+  color: #fff;
+  border-color: #27ae60;
+}
+
+.calibration-app .calib-step-arrow {
+  color: var(--border);
+  font-size: 16px;
+}
+
+.calibration-app .calib-actions-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.calibration-app .calib-result {
+  padding: 12px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.calibration-app .calib-result.quality-excellent {
+  border-color: #27ae60;
+  background: #f0faf0;
+}
+
+.calibration-app .calib-result.quality-good {
+  border-color: #8bc34a;
+  background: #f8fbf0;
+}
+
+.calibration-app .calib-result.quality-acceptable {
+  border-color: #ff9800;
+  background: #fffbf0;
+}
+
+.calibration-app .calib-result.quality-poor {
+  border-color: #f44336;
+  background: #fff5f5;
+}
+
+.calibration-app .calib-result.quality-bad {
+  border-color: #b71c1c;
+  background: #ffebee;
+}
+
+.calibration-app .calib-migration-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  background: #fff;
+}
+
+.calibration-app .calib-migration-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.calibration-app .cand-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.calibration-app .cand-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.calibration-app .cand-stat .num {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.calibration-app .cand-stat.pending .num { color: #3498db; }
+.calibration-app .cand-stat.accepted .num { color: #27ae60; }
+.calibration-app .cand-stat.rejected .num { color: #95a5a6; }
+
+.calibration-app .migr-batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.calibration-app .migration-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.calibration-app .migration-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.calibration-app .migration-item:last-child {
+  border-bottom: none;
+}
+
+.calibration-app .migration-item .migr-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.calibration-app .migration-item .migr-status.pending { background: #3498db; }
+.calibration-app .migration-item .migr-status.accepted { background: #27ae60; }
+.calibration-app .migration-item .migr-status.rejected { background: #95a5a6; }
+
+.calibration-app .migration-item .migr-type {
+  flex: 1;
+}
+
+.calibration-app .migration-item .migr-type select {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.calibration-app .migration-item .migr-coords {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 100px;
+}
+
+.calibration-app .migration-item .migr-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.calibration-app .quality-viz {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 40px;
+  margin: 8px 0;
+  padding: 0 4px;
+}
+
+.calibration-app .quality-bar {
+  flex: 1;
+  min-width: 24px;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s;
+  position: relative;
+}
+
+.calibration-app .quality-bar.good { background: #27ae60; }
+.calibration-app .quality-bar.warn { background: #ff9800; }
+.calibration-app .quality-bar.bad { background: #f44336; }
+
+.calibration-app .quality-bar-label {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.calibration-app .calib-dual-panels {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px;
+  min-height: 60vh;
+}
+
+.calibration-app .calib-image-stage {
+  position: relative;
+  display: inline-block;
+}
+
+.calibration-app .calib-image-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 55vh;
+}
+
+.calibration-app .calib-image-stage .markers,
+.calibration-app .calib-image-stage .calibration-layer,
+.calibration-app .calib-image-stage .migration-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.calibration-app .calib-image-stage .calibration-layer {
+  z-index: 10;
+}
+
+.calibration-app .calib-image-stage .migration-layer {
+  z-index: 5;
+}
+
+.calibration-app .calib-image-stage .markers {
+  z-index: 3;
+}
+
+.calibration-app .calib-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.calibration-app .calib-controls-section {
+  padding: 0 24px 24px;
+}
+
+.calibration-app .calib-points-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.calibration-app .calib-points-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.calibration-app .calib-points-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.calibration-app .calib-points-column {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fff;
+}
+
+.calibration-app .calib-column-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.calibration-app .calib-point-num {
+  display: inline-block;
+  width: 24px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.calibration-app .calib-point-coord {
+  display: inline-block;
+  min-width: 120px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.calibration-app .calib-pick-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.calibration-app .calib-step-connector {
+  width: 32px;
+  height: 2px;
+  background: var(--border);
+}
+
+.calibration-app .calib-result-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.calibration-app .calib-quality-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.calibration-app .calib-transform-type {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.calibration-app .calib-result-details {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.calibration-app .calib-result-warnings {
+  font-size: 12px;
+  color: #f44336;
+}
+
+.calibration-app .calib-migration-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.calibration-app .cand-stat-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.calibration-app .cand-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.calibration-app .cand-stat-value.pending { color: #3498db; }
+.calibration-app .cand-stat-value.accepted { color: #27ae60; }
+.calibration-app .cand-stat-value.ignored { color: #95a5a6; }
+
+.calibration-app .calib-migration-batch {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.calibration-app .migr-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.calibration-app .migr-item:last-child {
+  border-bottom: none;
+}
+
+.calibration-app .migr-item-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.calibration-app .migr-item-name {
+  font-weight: 600;
+}
+
+.calibration-app .migr-item-point,
+.calibration-app .migr-item-region {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.calibration-app .migr-item-coords {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.calibration-app .migr-item-type-select select {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.calibration-app .migr-item-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.calibration-app .migr-action-btn {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.calibration-app .migr-action-btn.accept:hover {
+  background: #27ae60;
+  color: #fff;
+  border-color: #27ae60;
+}
+
+.calibration-app .migr-action-btn.reject:hover {
+  background: #e74c3c;
+  color: #fff;
+  border-color: #e74c3c;
+}
+
+.calibration-app .migr-action-btn.delete:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.calibration-app .migr-action-btn.reset:hover {
+  background: #ff9800;
+  color: #fff;
+  border-color: #ff9800;
 }

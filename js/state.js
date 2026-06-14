@@ -573,8 +573,197 @@
       return { byId: counts, byName: nameCounts, types };
     },
 
+    addMigratedMarker({ typeId, type, note, x, y, realX, realY, sourceMarkerId, migratedFrom, transformType, positionAdjusted }) {
+      const page = this.currentPage;
+      if (!page) return null;
+      let resolvedTypeId;
+      if (typeId && this.isValidTypeId(typeId)) {
+        resolvedTypeId = typeId;
+      } else if (type) {
+        const byName = this.findTypeByName(type);
+        if (byName) resolvedTypeId = byName.id;
+      }
+      if (!resolvedTypeId) return null;
+      const typeInfo = this.findTypeById(resolvedTypeId);
+      const marker = {
+        id: crypto.randomUUID(),
+        mode: "point",
+        typeId: resolvedTypeId,
+        type: typeInfo.name,
+        note: (note || "").trim(),
+        x: Number(Number(x).toFixed(2)),
+        y: Number(Number(y).toFixed(2)),
+        migrated: true,
+        sourceMarkerId: sourceMarkerId || null,
+        migratedFrom: migratedFrom || null,
+        transformType: transformType || null,
+        createdAt: new Date().toISOString(),
+      };
+      if (positionAdjusted) marker.positionAdjusted = true;
+      if (realX !== undefined && realY !== undefined) {
+        marker.realX = Number(Number(realX).toFixed(2));
+        marker.realY = Number(Number(realY).toFixed(2));
+      }
+      page.markers.push(marker);
+      page.updatedAt = marker.createdAt;
+      this._persist();
+      this._notify();
+      return marker;
+    },
+
+    addMigratedRegion({ typeId, type, note, x, y, width, height, realX, realY, realWidth, realHeight, sourceMarkerId, migratedFrom, transformType, positionAdjusted }) {
+      const page = this.currentPage;
+      if (!page) return null;
+      let resolvedTypeId;
+      if (typeId && this.isValidTypeId(typeId)) {
+        resolvedTypeId = typeId;
+      } else if (type) {
+        const byName = this.findTypeByName(type);
+        if (byName) resolvedTypeId = byName.id;
+      }
+      if (!resolvedTypeId) return null;
+      const typeInfo = this.findTypeById(resolvedTypeId);
+      const marker = {
+        id: crypto.randomUUID(),
+        mode: "region",
+        typeId: resolvedTypeId,
+        type: typeInfo.name,
+        note: (note || "").trim(),
+        x: Number(Number(x).toFixed(2)),
+        y: Number(Number(y).toFixed(2)),
+        width: Number(Number(width || 0).toFixed(2)),
+        height: Number(Number(height || 0).toFixed(2)),
+        migrated: true,
+        sourceMarkerId: sourceMarkerId || null,
+        migratedFrom: migratedFrom || null,
+        transformType: transformType || null,
+        createdAt: new Date().toISOString(),
+      };
+      if (positionAdjusted) marker.positionAdjusted = true;
+      if (realX !== undefined && realY !== undefined) {
+        marker.realX = Number(Number(realX).toFixed(2));
+        marker.realY = Number(Number(realY).toFixed(2));
+      }
+      if (realWidth !== undefined && realHeight !== undefined) {
+        marker.realWidth = Number(Number(realWidth).toFixed(2));
+        marker.realHeight = Number(Number(realHeight).toFixed(2));
+      }
+      if (marker.width < 1 || marker.height < 1) return null;
+      page.markers.push(marker);
+      page.updatedAt = marker.createdAt;
+      this._persist();
+      this._notify();
+      return marker;
+    },
+
+    getMigratedMarkerCount(pageId) {
+      const page = pageId
+        ? this._state.pages.find((p) => p.id === pageId)
+        : this.currentPage;
+      if (!page) return 0;
+      return page.markers.filter((m) => m.migrated).length;
+    },
+
     getTotalMarkers() {
       return this._state.pages.reduce((acc, p) => acc + p.markers.length, 0);
+    },
+
+    getCalibrationData() {
+      if (!this._state.calibrationSessions) {
+        this._state.calibrationSessions = [];
+      }
+      return this._state.calibrationSessions;
+    },
+
+    addCalibrationSession(session) {
+      if (!session) return null;
+      if (!this._state.calibrationSessions) {
+        this._state.calibrationSessions = [];
+      }
+      this._state.calibrationSessions.push(session);
+      this._persist();
+      this._notify();
+      return session;
+    },
+
+    removeCalibrationSession(sessionId) {
+      if (!this._state.calibrationSessions) return false;
+      const before = this._state.calibrationSessions.length;
+      this._state.calibrationSessions = this._state.calibrationSessions.filter(
+        (s) => s.id !== sessionId
+      );
+      if (this._state.calibrationSessions.length === before) return false;
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    getMigratedMarkersSummary() {
+      const summary = [];
+      this._state.pages.forEach((p) => {
+        const migrated = p.markers.filter((m) => m.migrated);
+        if (migrated.length > 0) {
+          summary.push({
+            pageId: p.id,
+            pageName: p.name || p.fileName || "",
+            count: migrated.length,
+            transformTypes: [...new Set(migrated.map((m) => m.transformType).filter(Boolean))],
+            sourcePages: [...new Set(migrated.map((m) => m.migratedFrom).filter(Boolean))],
+          });
+        }
+      });
+      return summary;
+    },
+
+    getCalibrationSessionById(sessionId) {
+      if (!this._state.calibrationSessions) return null;
+      return this._state.calibrationSessions.find((s) => s.id === sessionId) || null;
+    },
+
+    updateCalibrationSession(sessionId, updates) {
+      if (!this._state.calibrationSessions) return null;
+      const session = this._state.calibrationSessions.find((s) => s.id === sessionId);
+      if (!session) return null;
+      Object.assign(session, updates);
+      session.updatedAt = new Date().toISOString();
+      this._persist();
+      this._notify();
+      return session;
+    },
+
+    clearAllCalibrationSessions() {
+      if (!this._state.calibrationSessions) return 0;
+      const count = this._state.calibrationSessions.length;
+      this._state.calibrationSessions = [];
+      this._persist();
+      this._notify();
+      return count;
+    },
+
+    getCalibrationSessionCount() {
+      if (!this._state.calibrationSessions) return 0;
+      return this._state.calibrationSessions.length;
+    },
+
+    getMigratedMarkersBySource(sourceMarkerId) {
+      const results = [];
+      this._state.pages.forEach((p) => {
+        p.markers.forEach((m) => {
+          if (m.sourceMarkerId === sourceMarkerId) {
+            results.push({ pageId: p.id, marker: m });
+          }
+        });
+      });
+      return results;
+    },
+
+    isMarkerMigrated(markerId, pageId) {
+      const page = pageId
+        ? this._state.pages.find((p) => p.id === pageId)
+        : this.currentPage;
+      if (!page) return false;
+      const marker = page.markers.find((m) => m.id === markerId);
+      return marker ? Boolean(marker.migrated) : false;
     },
   };
 

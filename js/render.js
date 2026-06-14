@@ -68,6 +68,10 @@
     candidateList: null,
     candidateFilterTabs: null,
     candidateToggleBtn: null,
+    migrationLayer: null,
+    migrationLayerSimple: null,
+    calibrationLayer: null,
+    calibrationLayerSimple: null,
   };
 
   let viewerMode = false;
@@ -140,6 +144,10 @@
     Doms.candidateList = document.getElementById("candidateList");
     Doms.candidateFilterTabs = document.getElementById("candidateFilterTabs");
     Doms.candidateToggleBtn = document.getElementById("candidateToggleBtn");
+    Doms.migrationLayer = document.getElementById("migrationLayer");
+    Doms.migrationLayerSimple = document.getElementById("migrationLayerSimple");
+    Doms.calibrationLayer = document.getElementById("calibrationLayer");
+    Doms.calibrationLayerSimple = document.getElementById("calibrationLayerSimple");
   }
 
   function escapeHtml(str) {
@@ -337,27 +345,30 @@
     const color = getColorForMarker(marker);
     const fill = hexWithAlpha(color, 0.15);
     const typeInfo = State.findTypeById(marker.typeId) || { name: marker.type };
-    const title = `${marker.mode === "region" ? "[区域] " : ""}${typeInfo.name}${marker.note ? "：" + marker.note : ""}`;
+    var title = `${marker.mode === "region" ? "[区域] " : ""}${typeInfo.name}${marker.note ? "：" + marker.note : ""}`;
+    if (marker.migrated) title += " [跨页迁移]";
 
     let styleStr = "";
     for (const key in style) {
       styleStr += `${key}:${style[key]};`;
     }
 
+    const migrCls = marker.migrated ? " migrated" : "";
+
     if (marker.mode === "region") {
       return `
-        <span class="region-marker"
+        <span class="region-marker${migrCls}"
               data-type="${escapeHtml(typeInfo.name)}"
               data-type-id="${marker.typeId}"
               data-marker="${marker.id}"
               title="${escapeHtml(title)}"
               style="${styleStr}border-color:${color};background:${fill};">
-          <span class="region-label" style="background:${color};">${escapeHtml(typeInfo.name)}</span>
+          <span class="region-label" style="background:${color};">${escapeHtml(typeInfo.name)}${marker.migrated ? " ⟵" : ""}</span>
         </span>
       `;
     }
     return `
-      <span class="marker"
+      <span class="marker${migrCls}"
             data-type="${escapeHtml(typeInfo.name)}"
             data-type-id="${marker.typeId}"
             data-marker="${marker.id}"
@@ -654,6 +665,9 @@
         const modeTag = isRegion
           ? '<span class="record-mode mode-region">区域</span>'
           : '<span class="record-mode mode-point">点</span>';
+        const migrTag = marker.migrated
+          ? '<span class="record-mode mode-migrated">迁移</span>'
+          : '';
 
         let dims = "";
         if (isRegion) {
@@ -671,7 +685,7 @@
 
         return `
           <article class="record">
-            <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}</strong>
+            <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}${migrTag}</strong>
             <p>${note}${dims}${coords}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
             <button type="button" data-delete="${marker.id}">删除</button>
           </article>
@@ -772,6 +786,125 @@
     );
   }
 
+  function renderMigrationCandidates() {
+    const page = State.currentPage;
+    const calibrationUI = window.CalibrationUI;
+    if (!calibrationUI) return;
+
+    const calData = calibrationUI.getCalibration();
+    const isTarget = calData && calData.targetPageId && page && page.id === calData.targetPageId;
+
+    const getLayer = function () {
+      if (viewerMode) return Doms.migrationLayer;
+      return Doms.migrationLayerSimple;
+    };
+
+    const layer = getLayer();
+    if (!layer) return;
+
+    if (!isTarget || !calData.migrationCandidates || calData.migrationCandidates.length === 0) {
+      layer.innerHTML = "";
+      return;
+    }
+
+    const candidates = calData.migrationCandidates;
+
+    if (viewerMode && imageViewer && imageViewer.imageLoaded) {
+      layer.innerHTML = candidates.map(function (c) {
+        const style = imageViewer.getMarkerStageStyle({
+          mode: c.mode || "point",
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+        });
+        return renderMigrationCandidateHtml(c, style);
+      }).join("");
+    } else {
+      layer.innerHTML = candidates.map(function (c) {
+        if (c.mode === "region") {
+          return renderMigrationCandidateHtml(c, {
+            left: c.x + "%",
+            top: c.y + "%",
+            width: c.width + "%",
+            height: c.height + "%",
+          });
+        }
+        return renderMigrationCandidateHtml(c, {
+          left: c.x + "%",
+          top: c.y + "%",
+        });
+      }).join("");
+    }
+  }
+
+  function renderMigrationCandidateHtml(candidate, style) {
+    const status = candidate.status || "pending";
+    const isPoint = candidate.mode !== "region";
+    const styleStr = Object.keys(style)
+      .map((k) => `${k}:${style[k]}`)
+      .join(";");
+    const typeInfo = State.findTypeById(candidate.typeId) || { name: candidate.type || "未知" };
+    const label = "迁移:" + typeInfo.name;
+    return `
+      <div class="migration-candidate ${status} ${isPoint ? "point" : ""}"
+           data-migration-id="${candidate.id}"
+           style="${styleStr}">
+        ${!isPoint ? `<span class="migr-badge">${label}</span>` : ""}
+      </div>
+    `;
+  }
+
+  function renderCalibrationPoints() {
+    const calibrationUI = window.CalibrationUI;
+    if (!calibrationUI) return;
+
+    const calData = calibrationUI.getCalibration();
+    const picking = calibrationUI.getPickingInfo();
+    const page = State.currentPage;
+
+    const getLayer = function () {
+      if (viewerMode) return Doms.calibrationLayer;
+      return Doms.calibrationLayerSimple;
+    };
+
+    const layer = getLayer();
+    if (!layer) return;
+
+    if (!calData || !page) {
+      layer.innerHTML = "";
+      return;
+    }
+
+    var html = "";
+    var isSource = calData.sourcePageId === page.id;
+    var isTarget = calData.targetPageId === page.id;
+
+    if (isSource && calData.sourcePoints) {
+      calData.sourcePoints.forEach(function (pt, i) {
+        if (pt) {
+          var highlight = (picking && picking.side === "source" && picking.index === i) ? " active" : "";
+          html += `<div class="calib-point source${highlight}" data-calib-side="source" data-calib-index="${i}" style="left:${pt.x}%;top:${pt.y}%;">
+            <span class="calib-point-label">S${i + 1}</span>
+          </div>`;
+        }
+      });
+    }
+
+    if (isTarget && calData.targetPoints) {
+      calData.targetPoints.forEach(function (pt, i) {
+        if (pt) {
+          var highlight = (picking && picking.side === "target" && picking.index === i) ? " active" : "";
+          html += `<div class="calib-point target${highlight}" data-calib-side="target" data-calib-index="${i}" style="left:${pt.x}%;top:${pt.y}%;">
+            <span class="calib-point-label">T${i + 1}</span>
+          </div>`;
+        }
+      });
+    }
+
+    layer.innerHTML = html;
+  }
+
   function renderAll() {
     renderTypeInput();
     renderVolumeMeta();
@@ -782,6 +915,8 @@
     renderCandidates();
     renderCandidateList();
     updateCandidateStats();
+    renderMigrationCandidates();
+    renderCalibrationPoints();
     renderPageNav();
     if (
       Doms.typeConfigModal &&

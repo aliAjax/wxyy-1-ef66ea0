@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>跨页位置校准与标记迁移</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body class="calibration-app">
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <a href="./index.html" class="back-link" title="返回主页">← 返回</a>
+        <h1>📐 跨页位置校准与标记迁移</h1>
+      </div>
+    </header>
+
+    <section class="calib-dual-panels">
+      <div class="calib-panel calib-source-panel">
+        <div class="calib-panel-header">
+          <h2>源页面（标记来源）</h2>
+          <select id="sourcePageSelect" class="calib-page-select"></select>
+        </div>
+        <div class="calib-image-container" id="sourceImageContainer">
+          <div class="calib-image-stage">
+            <img id="sourceImage" alt="源页面扫描页" />
+            <div id="sourceMarkersLayer" class="markers"></div>
+            <div id="sourceCalibLayer" class="calibration-layer"></div>
+            <div id="sourceMigrationLayer" class="migration-layer"></div>
+            <div class="calib-empty" id="sourceEmpty">请在上方下拉选择源页面</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="calib-panel calib-target-panel">
+        <div class="calib-panel-header">
+          <h2>目标页面（迁移目标）</h2>
+          <select id="targetPageSelect" class="calib-page-select"></select>
+        </div>
+        <div class="calib-image-container" id="targetImageContainer">
+          <div class="calib-image-stage">
+            <img id="targetImage" alt="目标页面扫描页" />
+            <div id="targetMarkersLayer" class="markers"></div>
+            <div id="targetCalibLayer" class="calibration-layer"></div>
+            <div id="targetMigrationLayer" class="migration-layer"></div>
+            <div class="calib-empty" id="targetEmpty">请在上方下拉选择目标页面</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="calib-controls-section">
+      <div class="calib-points-section">
+        <h2>校准点选取</h2>
+        <p class="calib-points-hint">点击「选点」按钮进入选点模式，然后在对应页面的图片上点击选取校准点。两张页面需选取相同的特征位置。</p>
+        <div class="calib-points-grid">
+          <div class="calib-points-column">
+            <div class="calib-column-title">源页面校准点</div>
+            <div class="calib-point-row" data-calib-side="source" data-calib-index="0">
+              <span class="calib-point-num">S1</span>
+              <span class="calib-point-coord" id="calibSrc0">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="source-0">选点</button>
+            </div>
+            <div class="calib-point-row" data-calib-side="source" data-calib-index="1">
+              <span class="calib-point-num">S2</span>
+              <span class="calib-point-coord" id="calibSrc1">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="source-1">选点</button>
+            </div>
+            <div class="calib-point-row" data-calib-side="source" data-calib-index="2">
+              <span class="calib-point-num">S3</span>
+              <span class="calib-point-coord" id="calibSrc2">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="source-2">选点</button>
+            </div>
+            <div class="calib-point-row" data-calib-side="source" data-calib-index="3">
+              <span class="calib-point-num">S4</span>
+              <span class="calib-point-coord" id="calibSrc3">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="source-3">选点</button>
+            </div>
+          </div>
+          <div class="calib-points-column">
+            <div class="calib-column-title">目标页面校准点</div>
+            <div class="calib-point-row" data-calib-side="target" data-calib-index="0">
+              <span class="calib-point-num">T1</span>
+              <span class="calib-point-coord" id="calibDst0">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="target-0">选点</button>
+            </div>
+            <div class="calib-point-row" data-calib-side="target" data-calib-index="1">
+              <span class="calib-point-num">T2</span>
+              <span class="calib-point-coord" id="calibDst1">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="target-1">选点</button>
+            </div>
+            <div class="calib-point-row" data-calib-side="target" data-calib-index="2">
+              <span class="calib-point-num">T3</span>
+              <span class="calib-point-coord" id="calibDst2">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="target-2">选点</button>
+            </div>
+            <div class="calib-point-row" data-calib-side="target" data-calib-index="3">
+              <span class="calib-point-num">T4</span>
+              <span class="calib-point-coord" id="calibDst3">未选取</span>
+              <button type="button" class="small-btn calib-pick-btn" data-pick="target-3">选点</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="calib-step-indicator" id="calibStepIndicator">
+        <div class="calib-step active" data-step="1">
+          <span class="calib-step-num">1</span>
+          <span class="calib-step-label">选取校准点</span>
+        </div>
+        <div class="calib-step-connector"></div>
+        <div class="calib-step" data-step="2">
+          <span class="calib-step-num">2</span>
+          <span class="calib-step-label">计算变换</span>
+        </div>
+        <div class="calib-step-connector"></div>
+        <div class="calib-step" data-step="3">
+          <span class="calib-step-num">3</span>
+          <span class="calib-step-label">审核迁移</span>
+        </div>
+      </div>
+
+      <div class="calib-actions-bar">
+        <button id="calibGenerateBtn" type="button" class="primary">🔄 计算变换并生成迁移候选</button>
+        <button id="calibResetBtn" type="button">重置校准</button>
+      </div>
+
+      <div id="calibResult" class="calib-result" style="display:none;"></div>
+    </section>
+
+    <section class="calib-migration-section" id="calibMigrationSection" style="display:none;">
+      <h2>迁移候选标记</h2>
+      <div class="calib-migration-stats" id="calibMigrationStats">
+        <div class="cand-stat">
+          <span class="cand-stat-label">待确认</span>
+          <span class="cand-stat-value pending" id="migrPending">0</span>
+        </div>
+        <div class="cand-stat">
+          <span class="cand-stat-label">已接受</span>
+          <span class="cand-stat-value accepted" id="migrAccepted">0</span>
+        </div>
+        <div class="cand-stat">
+          <span class="cand-stat-label">已拒绝</span>
+          <span class="cand-stat-value ignored" id="migrRejected">0</span>
+        </div>
+      </div>
+      <div class="calib-migration-batch">
+        <button id="migrAcceptAllBtn" type="button" class="small-btn">✓ 全部接受</button>
+        <button id="migrRejectAllBtn" type="button" class="small-btn">✕ 全部拒绝</button>
+        <button id="migrApplyBtn" type="button" class="primary small-btn">➜ 应用已接受</button>
+      </div>
+      <div id="migrationList" class="migration-list"></div>
+    </section>
+  </main>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="./js/storage.js"></script>
+  <script src="./js/state.js"></script>
+  <script src="./js/project-package.js"></script>
+  <script src="./js/calibration.js"></script>
+  <script src="./js/calibration-ui.js"></script>
+  <script src="./js/calibration-app.js"></script>
+</body>
+</html>
