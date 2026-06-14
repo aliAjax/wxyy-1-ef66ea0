@@ -11,7 +11,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Archive Volume Damage</p>
-        <h1>古籍纸张虫蛀标记</h1>
+        <h1>古籍纸张虫蛀标记<span class="tq-context-indicator" id="currentTaskIndicator" style="display:none;"></span></h1>
       </div>
       <div class="volume-meta">
         <label class="meta-field">
@@ -29,6 +29,7 @@
         <button id="configBtn" type="button" title="配置损伤类型">⚙ 类型配置</button>
         <button id="reviewBtn" type="button" title="进入复核工作台">复核工作台</button>
         <button id="diffBtn" type="button" title="双人标注差异比对">🔍 差异比对</button>
+        <button id="taskQueueBtn" type="button" title="离线审校任务队列">📋 任务队列</button>
         <button id="calibrationBtn" type="button" title="跨页校准与标记迁移">📐 跨页校准</button>
         <a href="calibration.html" class="topbar-link" title="打开跨页校准专页（双页并排视图）">📐 校准专页</a>
         <button id="exportBtn" type="button" title="导出项目工作包">📦 导出</button>
@@ -394,9 +395,164 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="taskQueueModal" style="display:none;">
+    <div class="modal modal-task-queue">
+      <div class="modal-header">
+        <h2>📋 离线审校任务队列</h2>
+        <button class="modal-close" id="closeTaskQueueBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="tq-stats" id="tqStats">
+          <div class="tq-stat-card"><span class="tq-stat-label">待标注</span><span class="tq-stat-value" id="tqPending">0</span></div>
+          <div class="tq-stat-card tq-stat-progress"><span class="tq-stat-label">标注中</span><span class="tq-stat-value" id="tqInProgress">0</span></div>
+          <div class="tq-stat-card tq-stat-done"><span class="tq-stat-label">已完成</span><span class="tq-stat-value" id="tqCompleted">0</span></div>
+        </div>
+
+        <div class="tq-toolbar">
+          <input type="text" id="tqSearch" placeholder="搜索页名或备注…" class="tq-search" />
+          <select id="tqFilter" class="tq-filter">
+            <option value="all">全部状态</option>
+            <option value="pending">待标注</option>
+            <option value="in_progress">标注中</option>
+            <option value="completed">已完成</option>
+          </select>
+          <button type="button" id="tqCreateBtn" class="primary">＋ 新建任务</button>
+        </div>
+
+        <div id="tqListEmpty" class="tq-list-empty">尚未创建任何审校任务。点击「新建任务」开始。</div>
+        <div id="tqList" class="tq-list"></div>
+
+        <div class="tq-batch-bar">
+          <button type="button" id="tqExportAllBtn" class="small-btn">📦 整批导出</button>
+          <button type="button" id="tqClearDoneBtn" class="small-btn">🗑 清除已完成</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="closeTaskQueueFooterBtn" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="taskCreateModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>新建审校任务</h2>
+        <button class="modal-close" id="closeTaskCreateBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <label>
+          <span>页面名称</span>
+          <input type="text" id="taskPageName" placeholder="如：卷三·第七页" maxlength="60" />
+        </label>
+        <label>
+          <span>优先级</span>
+          <select id="taskPriority">
+            <option value="high">高</option>
+            <option value="normal" selected>普通</option>
+            <option value="low">低</option>
+          </select>
+        </label>
+        <label>
+          <span>关联已有页面（可选）</span>
+          <select id="taskLinkPage">
+            <option value="">不关联</option>
+          </select>
+        </label>
+        <label>
+          <span>导入扫描图片（可选）</span>
+          <input type="file" id="taskImageInput" accept="image/*" style="font-size:12px;" />
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelTaskCreateBtn" type="button">取消</button>
+        <button id="confirmTaskCreateBtn" type="button" class="primary">创建任务</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="taskEditModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>编辑审校任务</h2>
+        <button class="modal-close" id="closeTaskEditBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="tq-edit-form">
+          <label>
+            <span>页面名称</span>
+            <input type="text" id="editTaskPageName" placeholder="如：卷三·第七页" maxlength="60" />
+          </label>
+          <label>
+            <span>优先级</span>
+            <div class="tq-priority-select" id="editTaskPriority">
+              <div class="tq-priority-option" data-priority="high">
+                <span class="tq-priority-dot high"></span>
+                <span>高</span>
+              </div>
+              <div class="tq-priority-option" data-priority="normal">
+                <span class="tq-priority-dot normal"></span>
+                <span>普通</span>
+              </div>
+              <div class="tq-priority-option" data-priority="low">
+                <span class="tq-priority-dot low"></span>
+                <span>低</span>
+              </div>
+            </div>
+          </label>
+          <label>
+            <span>复核备注</span>
+            <textarea id="editTaskReviewNotes" placeholder="添加复核备注，如：已复核，标记准确" maxlength="500"></textarea>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelTaskEditBtn" type="button">取消</button>
+        <button id="confirmTaskEditBtn" type="button" class="primary">保存修改</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="taskExportModal" style="display:none;">
+    <div class="modal tq-export-modal">
+      <div class="modal-header">
+        <h2>📦 导出任务队列</h2>
+        <button class="modal-close" id="closeTaskExportBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="tqExportSummary" class="tq-export-summary"></div>
+        <p class="modal-hint">选择要导出的任务状态和选项：</p>
+        <div class="tq-export-options">
+          <div class="tq-export-option">
+            <input type="checkbox" id="exportPending" checked />
+            <label for="exportPending">待标注任务</label>
+          </div>
+          <div class="tq-export-option">
+            <input type="checkbox" id="exportInProgress" checked />
+            <label for="exportInProgress">标注中任务</label>
+          </div>
+          <div class="tq-export-option">
+            <input type="checkbox" id="exportCompleted" checked />
+            <label for="exportCompleted">已完成任务</label>
+          </div>
+          <div class="tq-export-option">
+            <input type="checkbox" id="tqExportIncludeImages" checked />
+            <label for="tqExportIncludeImages">包含扫描图片数据</label>
+            <span class="export-option-hint" id="tqExportImageHint"></span>
+          </div>
+        </div>
+        <div id="tqExportSizeEstimate" class="export-size-estimate"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelTaskExportBtn" type="button">取消</button>
+        <button id="confirmTaskExportBtn" type="button" class="primary">确认导出</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toastContainer" class="toast-container"></div>
 
   <script src="./js/storage.js"></script>
+  <script src="./js/task-queue.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/project-package.js"></script>
   <script src="./js/candidate-detector.js"></script>

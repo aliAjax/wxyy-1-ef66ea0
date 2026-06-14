@@ -6,12 +6,14 @@
   const CandidateDetector = window.CandidateDetector;
   const CandidateManager = window.CandidateManager;
   const CalibrationUI = window.CalibrationUI;
+  const TaskQueue = window.TaskQueue;
 
   const imageInput = document.getElementById("imageInput");
   const noteInput = document.getElementById("noteInput");
   const configBtn = document.getElementById("configBtn");
   const reviewBtn = document.getElementById("reviewBtn");
   const diffBtn = document.getElementById("diffBtn");
+  const taskQueueBtn = document.getElementById("taskQueueBtn");
   const exportBtn = document.getElementById("exportBtn");
   const importBtn = document.getElementById("importBtn");
   const importFileInput = document.getElementById("importFileInput");
@@ -171,6 +173,11 @@
 
     const added = State.addPages(newPages);
     if (added > 0) {
+      if (TaskQueue) {
+        newPages.forEach(function (p) {
+          TaskQueue.createTaskFromPage(p, State);
+        });
+      }
       Render.refresh();
       const last = newPages[newPages.length - 1];
       if (last && files.length === 1) {
@@ -1440,6 +1447,451 @@
     }
   }
 
+  var taskQueueModal = document.getElementById("taskQueueModal");
+  var taskCreateModal = document.getElementById("taskCreateModal");
+  var closeTaskQueueBtn = document.getElementById("closeTaskQueueBtn");
+  var closeTaskQueueFooterBtn = document.getElementById("closeTaskQueueFooterBtn");
+  var tqSearch = document.getElementById("tqSearch");
+  var tqFilter = document.getElementById("tqFilter");
+  var tqCreateBtn = document.getElementById("tqCreateBtn");
+  var tqList = document.getElementById("tqList");
+  var tqListEmpty = document.getElementById("tqListEmpty");
+  var tqExportAllBtn = document.getElementById("tqExportAllBtn");
+  var tqClearDoneBtn = document.getElementById("tqClearDoneBtn");
+  var closeTaskCreateBtn = document.getElementById("closeTaskCreateBtn");
+  var cancelTaskCreateBtn = document.getElementById("cancelTaskCreateBtn");
+  var confirmTaskCreateBtn = document.getElementById("confirmTaskCreateBtn");
+  var taskPageName = document.getElementById("taskPageName");
+  var taskPriority = document.getElementById("taskPriority");
+  var taskLinkPage = document.getElementById("taskLinkPage");
+  var taskImageInput = document.getElementById("taskImageInput");
+
+  var taskEditModal = document.getElementById("taskEditModal");
+  var closeTaskEditBtn = document.getElementById("closeTaskEditBtn");
+  var cancelTaskEditBtn = document.getElementById("cancelTaskEditBtn");
+  var confirmTaskEditBtn = document.getElementById("confirmTaskEditBtn");
+  var editTaskPageName = document.getElementById("editTaskPageName");
+  var editTaskPriority = document.getElementById("editTaskPriority");
+  var editTaskReviewNotes = document.getElementById("editTaskReviewNotes");
+  var currentEditingTaskId = null;
+  var currentEditPriority = "normal";
+
+  var taskExportModal = document.getElementById("taskExportModal");
+  var closeTaskExportBtn = document.getElementById("closeTaskExportBtn");
+  var cancelTaskExportBtn = document.getElementById("cancelTaskExportBtn");
+  var confirmTaskExportBtn = document.getElementById("confirmTaskExportBtn");
+  var exportPending = document.getElementById("exportPending");
+  var exportInProgress = document.getElementById("exportInProgress");
+  var exportCompleted = document.getElementById("exportCompleted");
+  var tqExportIncludeImages = document.getElementById("tqExportIncludeImages");
+  var tqExportSummary = document.getElementById("tqExportSummary");
+  var tqExportImageHint = document.getElementById("tqExportImageHint");
+  var tqExportSizeEstimate = document.getElementById("tqExportSizeEstimate");
+  var currentTaskIndicator = document.getElementById("currentTaskIndicator");
+
+  function openTaskQueueModal() {
+    renderTaskQueueList();
+    updateTaskQueueStats();
+    taskQueueModal.style.display = "flex";
+  }
+
+  function closeTaskQueueModal() {
+    taskQueueModal.style.display = "none";
+  }
+
+  function openTaskCreateModal() {
+    taskPageName.value = "";
+    taskPriority.value = "normal";
+    taskImageInput.value = "";
+    renderTaskLinkPageOptions();
+    taskCreateModal.style.display = "flex";
+  }
+
+  function closeTaskCreateModal() {
+    taskCreateModal.style.display = "none";
+  }
+
+  function renderTaskLinkPageOptions() {
+    var pages = State.pages;
+    var options = '<option value="">不关联</option>';
+    pages.forEach(function (p, i) {
+      var name = p.name || p.fileName || "第 " + (i + 1) + " 页";
+      options += '<option value="' + p.id + '">' + escapeHtmlSimple(name) + '</option>';
+    });
+    taskLinkPage.innerHTML = options;
+  }
+
+  function updateTaskQueueStats() {
+    var counts = TaskQueue.counts;
+    var tqPending = document.getElementById("tqPending");
+    var tqInProgress = document.getElementById("tqInProgress");
+    var tqCompleted = document.getElementById("tqCompleted");
+    if (tqPending) tqPending.textContent = counts.pending;
+    if (tqInProgress) tqInProgress.textContent = counts.inProgress;
+    if (tqCompleted) tqCompleted.textContent = counts.completed;
+  }
+
+  function renderTaskQueueList() {
+    var filter = tqFilter ? tqFilter.value : "all";
+    var search = tqSearch ? tqSearch.value : "";
+    var tasks = TaskQueue.getSortedTasks(filter, search);
+    var activeId = TaskQueue.activeTaskId;
+
+    if (tasks.length === 0) {
+      tqListEmpty.style.display = "block";
+      tqList.innerHTML = "";
+      return;
+    }
+
+    tqListEmpty.style.display = "none";
+    tqList.innerHTML = tasks.map(function (task) {
+      var isActive = task.id === activeId ? " active" : "";
+      var isCompleted = task.status === "completed" ? " completed" : "";
+      var priorityClass = task.priority || "normal";
+      var statusLabel = task.status === "pending" ? "待标注"
+        : task.status === "in_progress" ? "标注中"
+        : "已完成";
+      var markerCount = task.markers ? task.markers.length : 0;
+      var timeStr = "";
+      if (task.completedAt) {
+        timeStr = "完成于 " + new Date(task.completedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+      } else if (task.updatedAt) {
+        timeStr = "更新于 " + new Date(task.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+      }
+
+      var actionBtns = "";
+      actionBtns += '<button class="tq-action-btn edit" data-tq-action="edit" data-tq-id="' + task.id + '" title="编辑任务">✎</button>';
+      if (task.status === "completed") {
+        actionBtns += '<button class="tq-action-btn reopen" data-tq-action="reopen" data-tq-id="' + task.id + '" title="重新开始">↺</button>';
+      } else {
+        actionBtns += '<button class="tq-action-btn goto" data-tq-action="goto" data-tq-id="' + task.id + '" title="跳转到此任务">→</button>';
+        actionBtns += '<button class="tq-action-btn complete" data-tq-action="complete" data-tq-id="' + task.id + '" title="标记完成">✓</button>';
+      }
+      actionBtns += '<button class="tq-action-btn delete" data-tq-action="delete" data-tq-id="' + task.id + '" title="删除任务">🗑</button>';
+
+      var reviewNotesHtml = "";
+      if (task.reviewNotes && task.reviewNotes.trim()) {
+        reviewNotesHtml = '<div class="tq-item-notes" title="' + escapeHtmlSimple(task.reviewNotes) + '">📝 ' + escapeHtmlSimple(task.reviewNotes.substring(0, 50)) + (task.reviewNotes.length > 50 ? "…" : "") + '</div>';
+      }
+
+      return '<div class="tq-item' + isActive + isCompleted + '" data-tq-task="' + task.id + '">' +
+        '<div class="tq-item-priority ' + priorityClass + '"></div>' +
+        '<div class="tq-item-body">' +
+          '<div class="tq-item-name">' + escapeHtmlSimple(task.pageName || "未命名页面") + '</div>' +
+          '<div class="tq-item-meta">' +
+            '<span class="tq-item-status ' + task.status + '">' + statusLabel + '</span>' +
+            '<span>' + markerCount + ' 条标记</span>' +
+            '<span>' + timeStr + '</span>' +
+          '</div>' +
+          reviewNotesHtml +
+        '</div>' +
+        '<div class="tq-item-actions">' + actionBtns + '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  function handleTaskAction(taskId, action) {
+    if (!taskId) return;
+    switch (action) {
+      case "goto":
+        TaskQueue.setActive(taskId);
+        var task = TaskQueue.activeTask;
+        if (task && task.pageId) {
+          State.switchPage(task.pageId);
+        }
+        renderTaskQueueList();
+        updateTaskQueueStats();
+        updateCurrentTaskIndicator();
+        showToast("已切换到任务：" + (task ? task.pageName : ""), "info");
+        break;
+      case "complete":
+        TaskQueue.completeTask(taskId);
+        renderTaskQueueList();
+        updateTaskQueueStats();
+        showToast("任务已标记完成", "success");
+        var advanced = TaskQueue.advanceToNext();
+        if (advanced) {
+          var nextTask = TaskQueue.activeTask;
+          if (nextTask && nextTask.pageId) {
+            State.switchPage(nextTask.pageId);
+          }
+          showToast("自动进入下一任务：" + (nextTask ? nextTask.pageName : ""), "info");
+        }
+        renderTaskQueueList();
+        updateCurrentTaskIndicator();
+        break;
+      case "reopen":
+        TaskQueue.reopenTask(taskId);
+        renderTaskQueueList();
+        updateTaskQueueStats();
+        updateCurrentTaskIndicator();
+        showToast("任务已重新开始", "info");
+        break;
+      case "delete":
+        if (!confirm("确认删除此任务？")) return;
+        TaskQueue.removeTask(taskId);
+        renderTaskQueueList();
+        updateTaskQueueStats();
+        updateCurrentTaskIndicator();
+        showToast("任务已删除", "info");
+        break;
+      case "edit":
+        openTaskEditModal(taskId);
+        break;
+    }
+  }
+
+  function handleConfirmTaskCreate() {
+    var pageNameVal = taskPageName.value.trim();
+    var priorityVal = taskPriority.value;
+    var linkPageId = taskLinkPage.value;
+    var imageFile = taskImageInput.files && taskImageInput.files[0];
+
+    if (!pageNameVal && !linkPageId) {
+      alert("请输入页面名称或关联已有页面。");
+      return;
+    }
+
+    if (linkPageId) {
+      var page = State.pages.find(function (p) { return p.id === linkPageId; });
+      if (page) {
+        var task = TaskQueue.createTaskFromPage(page, State);
+        if (task) {
+          if (pageNameVal) {
+            TaskQueue.updateTask(task.id, { pageName: pageNameVal, priority: priorityVal });
+          } else {
+            TaskQueue.updateTask(task.id, { priority: priorityVal });
+          }
+          showToast("已从页面创建任务：" + (pageNameVal || task.pageName), "success");
+        }
+      }
+    } else if (imageFile) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var types = State.damageTypes ? JSON.parse(JSON.stringify(State.damageTypes)) : [];
+        var task = TaskQueue.createTask({
+          pageName: pageNameVal,
+          priority: priorityVal,
+          image: e.target.result,
+          damageTypes: types,
+          markers: [],
+        });
+        if (task) {
+          var newPage = createPage({ dataUrl: e.target.result, fileName: pageNameVal + ".jpg" });
+          State.addPages([newPage]);
+          TaskQueue.updateTask(task.id, { pageId: newPage.id });
+          State.switchPage(newPage.id);
+          renderTaskQueueList();
+          updateTaskQueueStats();
+          updateCurrentTaskIndicator();
+          showToast("已创建任务并导入图片：" + pageNameVal, "success");
+        }
+      };
+      reader.readAsDataURL(imageFile);
+    } else {
+      var types = State.damageTypes ? JSON.parse(JSON.stringify(State.damageTypes)) : [];
+      var task = TaskQueue.createTask({
+        pageName: pageNameVal,
+        priority: priorityVal,
+        damageTypes: types,
+        markers: [],
+      });
+      if (task) {
+        showToast("已创建任务：" + pageNameVal, "success");
+      }
+    }
+
+    closeTaskCreateModal();
+    renderTaskQueueList();
+    updateTaskQueueStats();
+    updateCurrentTaskIndicator();
+  }
+
+  function handleTaskExportAll() {
+    openTaskExportModal();
+  }
+
+  function handleTaskClearDone() {
+    var count = TaskQueue.clearCompleted();
+    if (count > 0) {
+      showToast("已清除 " + count + " 个已完成任务", "success");
+      renderTaskQueueList();
+      updateTaskQueueStats();
+      updateCurrentTaskIndicator();
+    } else {
+      showToast("没有已完成的任务", "info");
+    }
+  }
+
+  function openTaskEditModal(taskId) {
+    var task = TaskQueue.tasks.find(function (t) { return t.id === taskId; });
+    if (!task) return;
+
+    currentEditingTaskId = taskId;
+    currentEditPriority = task.priority;
+    editTaskPageName.value = task.pageName || "";
+    editTaskReviewNotes.value = task.reviewNotes || "";
+
+    var priorityOptions = editTaskPriority.querySelectorAll(".tq-priority-option");
+    priorityOptions.forEach(function (opt) {
+      opt.classList.toggle("active", opt.dataset.priority === task.priority);
+    });
+
+    taskEditModal.style.display = "flex";
+  }
+
+  function closeTaskEditModal() {
+    taskEditModal.style.display = "none";
+    currentEditingTaskId = null;
+  }
+
+  function handleTaskEditPriority(priority) {
+    currentEditPriority = priority;
+    var priorityOptions = editTaskPriority.querySelectorAll(".tq-priority-option");
+    priorityOptions.forEach(function (opt) {
+      opt.classList.toggle("active", opt.dataset.priority === priority);
+    });
+  }
+
+  function handleConfirmTaskEdit() {
+    if (!currentEditingTaskId) return;
+
+    var pageNameVal = editTaskPageName.value.trim();
+    var reviewNotesVal = editTaskReviewNotes.value.trim();
+
+    if (!pageNameVal) {
+      alert("请输入页面名称。");
+      return;
+    }
+
+    TaskQueue.updateTask(currentEditingTaskId, {
+      pageName: pageNameVal,
+      priority: currentEditPriority,
+      reviewNotes: reviewNotesVal,
+    });
+
+    showToast("任务已更新", "success");
+    closeTaskEditModal();
+    renderTaskQueueList();
+    updateTaskQueueStats();
+    updateCurrentTaskIndicator();
+  }
+
+  function openTaskExportModal() {
+    updateTaskExportSummary();
+    taskExportModal.style.display = "flex";
+  }
+
+  function closeTaskExportModal() {
+    taskExportModal.style.display = "none";
+  }
+
+  function updateTaskExportSummary() {
+    var counts = TaskQueue.counts;
+    var includeImages = tqExportIncludeImages.checked;
+
+    var pendingChecked = exportPending.checked;
+    var inProgressChecked = exportInProgress.checked;
+    var completedChecked = exportCompleted.checked;
+
+    var exportCount = 0;
+    if (pendingChecked) exportCount += counts.pending;
+    if (inProgressChecked) exportCount += counts.inProgress;
+    if (completedChecked) exportCount += counts.completed;
+
+    var totalImageSizeKB = 0;
+    if (includeImages) {
+      TaskQueue.tasks.forEach(function (t) {
+        var statusMatch =
+          (t.status === "pending" && pendingChecked) ||
+          (t.status === "in_progress" && inProgressChecked) ||
+          (t.status === "completed" && completedChecked);
+        if (statusMatch && t.image) {
+          totalImageSizeKB += Math.round((t.image.length * 3) / 4 / 1024);
+        }
+      });
+    }
+
+    tqExportSummary.innerHTML =
+      '<div class="tq-export-summary-row"><span>待标注</span><strong>' + counts.pending + ' 个</strong></div>' +
+      '<div class="tq-export-summary-row"><span>标注中</span><strong>' + counts.inProgress + ' 个</strong></div>' +
+      '<div class="tq-export-summary-row"><span>已完成</span><strong>' + counts.completed + ' 个</strong></div>' +
+      '<div class="tq-export-summary-row"><span>将导出</span><strong class="accent">' + exportCount + ' 个任务</strong></div>';
+
+    if (includeImages && totalImageSizeKB > 0) {
+      tqExportImageHint.textContent = "（约 " + formatFileSize(totalImageSizeKB * 1024) + "）";
+      tqExportImageHint.style.display = "inline";
+    } else {
+      tqExportImageHint.textContent = "";
+      tqExportImageHint.style.display = "none";
+    }
+
+    var estimatedSizeKB = exportCount * 2 + totalImageSizeKB;
+    tqExportSizeEstimate.innerHTML =
+      '<span class="export-size-label">预估文件大小</span>' +
+      '<span class="export-size-value' + (estimatedSizeKB > 10240 ? " large" : "") + '">' + formatFileSize(estimatedSizeKB * 1024) + '</span>';
+  }
+
+  function handleTaskExportWithOptions() {
+    var statuses = [];
+    if (exportPending.checked) statuses.push("pending");
+    if (exportInProgress.checked) statuses.push("in_progress");
+    if (exportCompleted.checked) statuses.push("completed");
+
+    if (statuses.length === 0) {
+      showToast("请至少选择一种状态的任务进行导出", "warning");
+      return;
+    }
+
+    var includeImages = tqExportIncludeImages.checked;
+    var taskIds = TaskQueue.tasks
+      .filter(function (t) { return statuses.includes(t.status); })
+      .map(function (t) { return t.id; });
+
+    if (taskIds.length === 0) {
+      showToast("没有符合条件的任务可导出", "warning");
+      return;
+    }
+
+    var data = TaskQueue.exportTasks(taskIds, includeImages);
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "task_queue_export_" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1500);
+
+    showToast("已导出 " + taskIds.length + " 个任务", "success");
+    closeTaskExportModal();
+  }
+
+  function syncCurrentPageToTaskQueue() {
+    var page = State.currentPage;
+    if (!page) return;
+    TaskQueue.syncFromPage(page.id, page);
+  }
+
+  function updateCurrentTaskIndicator() {
+    if (!currentTaskIndicator) return;
+    var activeTask = TaskQueue.activeTask;
+    if (activeTask) {
+      var statusText = activeTask.status === "pending" ? "待标注"
+        : activeTask.status === "in_progress" ? "标注中"
+        : "已完成";
+      var priorityText = activeTask.priority === "high" ? "高优"
+        : activeTask.priority === "low" ? "低优"
+        : "";
+      var displayText = priorityText ? priorityText + " · " : "";
+      displayText += statusText + " · " + (activeTask.pageName || "未命名");
+      currentTaskIndicator.textContent = displayText;
+      currentTaskIndicator.style.display = "inline-flex";
+    } else {
+      currentTaskIndicator.style.display = "none";
+    }
+  }
+
   function bindEvents() {
     imageInput.addEventListener("change", () => {
       handleFiles(imageInput.files);
@@ -1722,10 +2174,128 @@
     State.subscribe(() => {
       handlePageChange();
     });
+
+    if (taskQueueBtn) {
+      taskQueueBtn.addEventListener("click", openTaskQueueModal);
+    }
+    if (closeTaskQueueBtn) {
+      closeTaskQueueBtn.addEventListener("click", closeTaskQueueModal);
+    }
+    if (closeTaskQueueFooterBtn) {
+      closeTaskQueueFooterBtn.addEventListener("click", closeTaskQueueModal);
+    }
+    if (taskQueueModal) {
+      taskQueueModal.addEventListener("click", function (e) {
+        if (e.target === taskQueueModal) closeTaskQueueModal();
+      });
+    }
+    if (tqSearch) {
+      tqSearch.addEventListener("input", renderTaskQueueList);
+    }
+    if (tqFilter) {
+      tqFilter.addEventListener("change", renderTaskQueueList);
+    }
+    if (tqCreateBtn) {
+      tqCreateBtn.addEventListener("click", openTaskCreateModal);
+    }
+    if (tqList) {
+      tqList.addEventListener("click", function (e) {
+        var actionBtn = e.target.closest("[data-tq-action]");
+        if (actionBtn) {
+          e.stopPropagation();
+          handleTaskAction(actionBtn.dataset.tqId, actionBtn.dataset.tqAction);
+          return;
+        }
+        var item = e.target.closest("[data-tq-task]");
+        if (item) {
+          handleTaskAction(item.dataset.tqTask, "goto");
+        }
+      });
+    }
+    if (tqExportAllBtn) {
+      tqExportAllBtn.addEventListener("click", handleTaskExportAll);
+    }
+    if (tqClearDoneBtn) {
+      tqClearDoneBtn.addEventListener("click", handleTaskClearDone);
+    }
+    if (closeTaskCreateBtn) {
+      closeTaskCreateBtn.addEventListener("click", closeTaskCreateModal);
+    }
+    if (cancelTaskCreateBtn) {
+      cancelTaskCreateBtn.addEventListener("click", closeTaskCreateModal);
+    }
+    if (confirmTaskCreateBtn) {
+      confirmTaskCreateBtn.addEventListener("click", handleConfirmTaskCreate);
+    }
+    if (taskCreateModal) {
+      taskCreateModal.addEventListener("click", function (e) {
+        if (e.target === taskCreateModal) closeTaskCreateModal();
+      });
+    }
+
+    if (closeTaskEditBtn) {
+      closeTaskEditBtn.addEventListener("click", closeTaskEditModal);
+    }
+    if (cancelTaskEditBtn) {
+      cancelTaskEditBtn.addEventListener("click", closeTaskEditModal);
+    }
+    if (confirmTaskEditBtn) {
+      confirmTaskEditBtn.addEventListener("click", handleConfirmTaskEdit);
+    }
+    if (taskEditModal) {
+      taskEditModal.addEventListener("click", function (e) {
+        if (e.target === taskEditModal) closeTaskEditModal();
+      });
+    }
+    if (editTaskPriority) {
+      editTaskPriority.addEventListener("click", function (e) {
+        var option = e.target.closest("[data-priority]");
+        if (option) {
+          handleTaskEditPriority(option.dataset.priority);
+        }
+      });
+    }
+
+    if (closeTaskExportBtn) {
+      closeTaskExportBtn.addEventListener("click", closeTaskExportModal);
+    }
+    if (cancelTaskExportBtn) {
+      cancelTaskExportBtn.addEventListener("click", closeTaskExportModal);
+    }
+    if (confirmTaskExportBtn) {
+      confirmTaskExportBtn.addEventListener("click", handleTaskExportWithOptions);
+    }
+    if (taskExportModal) {
+      taskExportModal.addEventListener("click", function (e) {
+        if (e.target === taskExportModal) closeTaskExportModal();
+      });
+    }
+    if (exportPending) {
+      exportPending.addEventListener("change", updateTaskExportSummary);
+    }
+    if (exportInProgress) {
+      exportInProgress.addEventListener("change", updateTaskExportSummary);
+    }
+    if (exportCompleted) {
+      exportCompleted.addEventListener("change", updateTaskExportSummary);
+    }
+    if (tqExportIncludeImages) {
+      tqExportIncludeImages.addEventListener("change", updateTaskExportSummary);
+    }
+
+    State.subscribe(function () {
+      syncCurrentPageToTaskQueue();
+    });
   }
 
   function bootstrap() {
     State.init();
+    if (TaskQueue) {
+      TaskQueue.init();
+      TaskQueue.subscribe(function () {
+        updateCurrentTaskIndicator();
+      });
+    }
     Render.init();
     if (CandidateManager) {
       CandidateManager.init();
@@ -1736,6 +2306,7 @@
     bindEvents();
     setMode("point");
     updateSensitivityDisplay();
+    updateCurrentTaskIndicator();
   }
 
   if (document.readyState === "loading") {
