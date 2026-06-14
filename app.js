@@ -1488,6 +1488,7 @@
   var tqExportImageHint = document.getElementById("tqExportImageHint");
   var tqExportSizeEstimate = document.getElementById("tqExportSizeEstimate");
   var currentTaskIndicator = document.getElementById("currentTaskIndicator");
+  var suppressTaskSync = false;
 
   function openTaskQueueModal() {
     renderTaskQueueList();
@@ -1591,11 +1592,16 @@
   }
 
   function restoreTaskDamageTypes(taskId) {
-    if (!TaskQueue.restoreDamageTypesToState(taskId, State)) {
-      var task = TaskQueue.tasks.find(function (t) { return t.id === taskId; });
-      if (task && (!task.damageTypes || task.damageTypes.length === 0)) {
-        TaskQueue.updateTask(taskId, { damageTypes: JSON.parse(JSON.stringify(State.damageTypes)) });
+    suppressTaskSync = true;
+    try {
+      if (!TaskQueue.restoreDamageTypesToState(taskId, State)) {
+        var task = TaskQueue.tasks.find(function (t) { return t.id === taskId; });
+        if (task && (!task.damageTypes || task.damageTypes.length === 0)) {
+          TaskQueue.updateTask(taskId, { damageTypes: JSON.parse(JSON.stringify(State.damageTypes)) });
+        }
       }
+    } finally {
+      suppressTaskSync = false;
     }
   }
 
@@ -2316,6 +2322,7 @@
     }
 
     State.subscribe(function () {
+      if (suppressTaskSync) return;
       syncCurrentPageToTaskQueue();
       syncDamageTypesToActiveTask();
     });
