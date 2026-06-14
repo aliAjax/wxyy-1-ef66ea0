@@ -1236,9 +1236,8 @@
       prevPageId = State.pages[currentIndex - 1].id;
     }
 
-    var finalSourceId = calData.sourcePageId;
-    if (!finalSourceId && prevPageId) {
-      finalSourceId = prevPageId;
+    var finalSourceId = calData.sourcePageId || prevPageId || (pages.length > 0 ? pages[0].id : "");
+    if (finalSourceId && finalSourceId !== calData.sourcePageId) {
       CalibrationUI.setSourcePage(finalSourceId);
     }
     if (finalSourceId) {
