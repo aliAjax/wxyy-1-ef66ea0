@@ -1590,13 +1590,24 @@
     }).join("");
   }
 
+  function restoreTaskDamageTypes(taskId) {
+    if (!TaskQueue.restoreDamageTypesToState(taskId, State)) {
+      var task = TaskQueue.tasks.find(function (t) { return t.id === taskId; });
+      if (task && (!task.damageTypes || task.damageTypes.length === 0)) {
+        TaskQueue.updateTask(taskId, { damageTypes: JSON.parse(JSON.stringify(State.damageTypes)) });
+      }
+    }
+  }
+
   function handleTaskAction(taskId, action) {
     if (!taskId) return;
     switch (action) {
       case "goto":
+        var task = TaskQueue.tasks.find(function (t) { return t.id === taskId; });
+        if (!task) return;
         TaskQueue.setActive(taskId);
-        var task = TaskQueue.activeTask;
-        if (task && task.pageId) {
+        restoreTaskDamageTypes(taskId);
+        if (task.pageId) {
           State.switchPage(task.pageId);
         }
         renderTaskQueueList();
@@ -1612,8 +1623,11 @@
         var advanced = TaskQueue.advanceToNext();
         if (advanced) {
           var nextTask = TaskQueue.activeTask;
-          if (nextTask && nextTask.pageId) {
-            State.switchPage(nextTask.pageId);
+          if (nextTask) {
+            restoreTaskDamageTypes(nextTask.id);
+            if (nextTask.pageId) {
+              State.switchPage(nextTask.pageId);
+            }
           }
           showToast("自动进入下一任务：" + (nextTask ? nextTask.pageName : ""), "info");
         }
@@ -1652,15 +1666,22 @@
       return;
     }
 
+    var currentTypes = State.damageTypes ? JSON.parse(JSON.stringify(State.damageTypes)) : [];
+
     if (linkPageId) {
       var page = State.pages.find(function (p) { return p.id === linkPageId; });
       if (page) {
-        var task = TaskQueue.createTaskFromPage(page, State);
+        var task = TaskQueue.createTask({
+          pageName: pageNameVal || page.name || page.fileName || "",
+          priority: priorityVal,
+          pageId: page.id,
+          image: page.image || "",
+          damageTypes: currentTypes,
+          markers: page.markers ? JSON.parse(JSON.stringify(page.markers)) : [],
+        });
         if (task) {
-          if (pageNameVal) {
-            TaskQueue.updateTask(task.id, { pageName: pageNameVal, priority: priorityVal });
-          } else {
-            TaskQueue.updateTask(task.id, { priority: priorityVal });
+          if (TaskQueue.activeTaskId === task.id) {
+            restoreTaskDamageTypes(task.id);
           }
           showToast("已从页面创建任务：" + (pageNameVal || task.pageName), "success");
         }
@@ -1668,18 +1689,18 @@
     } else if (imageFile) {
       var reader = new FileReader();
       reader.onload = function (e) {
-        var types = State.damageTypes ? JSON.parse(JSON.stringify(State.damageTypes)) : [];
         var task = TaskQueue.createTask({
           pageName: pageNameVal,
           priority: priorityVal,
           image: e.target.result,
-          damageTypes: types,
+          damageTypes: currentTypes,
           markers: [],
         });
         if (task) {
           var newPage = createPage({ dataUrl: e.target.result, fileName: pageNameVal + ".jpg" });
           State.addPages([newPage]);
           TaskQueue.updateTask(task.id, { pageId: newPage.id });
+          restoreTaskDamageTypes(task.id);
           State.switchPage(newPage.id);
           renderTaskQueueList();
           updateTaskQueueStats();
@@ -1689,14 +1710,16 @@
       };
       reader.readAsDataURL(imageFile);
     } else {
-      var types = State.damageTypes ? JSON.parse(JSON.stringify(State.damageTypes)) : [];
       var task = TaskQueue.createTask({
         pageName: pageNameVal,
         priority: priorityVal,
-        damageTypes: types,
+        damageTypes: currentTypes,
         markers: [],
       });
       if (task) {
+        if (TaskQueue.activeTaskId === task.id) {
+          restoreTaskDamageTypes(task.id);
+        }
         showToast("已创建任务：" + pageNameVal, "success");
       }
     }
@@ -1870,7 +1893,16 @@
   function syncCurrentPageToTaskQueue() {
     var page = State.currentPage;
     if (!page) return;
-    TaskQueue.syncFromPage(page.id, page);
+    var pageData = {
+      image: page.image,
+      markers: page.markers,
+      damageTypes: State.damageTypes,
+    };
+    TaskQueue.syncFromPage(page.id, pageData);
+  }
+
+  function syncDamageTypesToActiveTask() {
+    TaskQueue.syncDamageTypesFromState(State);
   }
 
   function updateCurrentTaskIndicator() {
@@ -2285,6 +2317,7 @@
 
     State.subscribe(function () {
       syncCurrentPageToTaskQueue();
+      syncDamageTypesToActiveTask();
     });
   }
 
@@ -2295,6 +2328,10 @@
       TaskQueue.subscribe(function () {
         updateCurrentTaskIndicator();
       });
+      var activeTask = TaskQueue.activeTask;
+      if (activeTask) {
+        restoreTaskDamageTypes(activeTask.id);
+      }
     }
     Render.init();
     if (CandidateManager) {

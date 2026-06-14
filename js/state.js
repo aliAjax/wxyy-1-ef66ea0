@@ -464,6 +464,19 @@
       this._notify();
     },
 
+    setDamageTypes(types) {
+      if (!Array.isArray(types)) return false;
+      var validTypes = types.filter(function (t) {
+        return t && t.id && t.name && t.color;
+      });
+      if (validTypes.length === 0) return false;
+      this._state.damageTypes = JSON.parse(JSON.stringify(validTypes));
+      refreshMarkerTypeNames(this._state);
+      this._persist();
+      this._notify();
+      return true;
+    },
+
     addDamageType({ name, color }) {
       if (!name || !name.trim()) return null;
       const normalizedName = name.trim();

@@ -56,9 +56,9 @@
 
   function normalizeTaskState(raw) {
     if (!raw || typeof raw !== "object") {
-      return structuredClone(DEFAULT_TASK_STATE);
+      return JSON.parse(JSON.stringify(DEFAULT_TASK_STATE));
     }
-    var state = Object.assign(structuredClone(DEFAULT_TASK_STATE), raw);
+    var state = Object.assign(JSON.parse(JSON.stringify(DEFAULT_TASK_STATE)), raw);
     state.tasks = Array.isArray(state.tasks)
       ? state.tasks.map(normalizeTask).filter(Boolean)
       : [];
@@ -155,14 +155,14 @@
       if (!page) return null;
       var damageTypes = [];
       if (volumeState && volumeState.damageTypes) {
-        damageTypes = structuredClone(volumeState.damageTypes);
+        damageTypes = JSON.parse(JSON.stringify(volumeState.damageTypes));
       }
       return this.createTask({
         pageName: page.name || page.fileName || "",
         pageId: page.id,
         image: page.image || "",
         damageTypes: damageTypes,
-        markers: page.markers ? structuredClone(page.markers) : [],
+        markers: page.markers ? JSON.parse(JSON.stringify(page.markers)) : [],
       });
     },
 
@@ -250,11 +250,31 @@
       var task = this._state.tasks.find(function (t) { return t.pageId === pageId; });
       if (!task) return null;
       if (pageData.image !== undefined) task.image = pageData.image;
-      if (pageData.markers !== undefined) task.markers = structuredClone(pageData.markers);
+      if (pageData.markers !== undefined) task.markers = JSON.parse(JSON.stringify(pageData.markers));
+      if (pageData.damageTypes !== undefined) {
+        task.damageTypes = JSON.parse(JSON.stringify(pageData.damageTypes));
+      }
       task.updatedAt = new Date().toISOString();
       this._persist();
       this._notify();
       return task;
+    },
+
+    syncDamageTypesFromState: function (volumeState) {
+      var activeTask = this.activeTask;
+      if (!activeTask || !volumeState || !volumeState.damageTypes) return false;
+      activeTask.damageTypes = JSON.parse(JSON.stringify(volumeState.damageTypes));
+      activeTask.updatedAt = new Date().toISOString();
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    restoreDamageTypesToState: function (taskId, volumeState) {
+      var task = this._state.tasks.find(function (t) { return t.id === taskId; });
+      if (!task || !volumeState || !volumeState.setDamageTypes) return false;
+      if (!task.damageTypes || task.damageTypes.length === 0) return false;
+      return volumeState.setDamageTypes(task.damageTypes);
     },
 
     syncToPage: function (taskId, volumeState) {
@@ -264,7 +284,7 @@
       var page = volumeState.pages.find(function (p) { return p.id === task.pageId; });
       if (!page) return false;
       if (task.markers) {
-        page.markers = structuredClone(task.markers);
+        page.markers = JSON.parse(JSON.stringify(task.markers));
       }
       page.updatedAt = new Date().toISOString();
       return true;
@@ -356,7 +376,7 @@
     },
 
     clearAll: function () {
-      this._state = structuredClone(DEFAULT_TASK_STATE);
+      this._state = JSON.parse(JSON.stringify(DEFAULT_TASK_STATE));
       this._state.createdAt = new Date().toISOString();
       this._state.updatedAt = new Date().toISOString();
       this._persist();
@@ -390,8 +410,8 @@
             status: page.markers && page.markers.length > 0 ? "in_progress" : "pending",
             pageId: page.id,
             image: page.image || "",
-            damageTypes: volumeState.damageTypes ? structuredClone(volumeState.damageTypes) : [],
-            markers: page.markers ? structuredClone(page.markers) : [],
+            damageTypes: volumeState.damageTypes ? JSON.parse(JSON.stringify(volumeState.damageTypes)) : [],
+            markers: page.markers ? JSON.parse(JSON.stringify(page.markers)) : [],
             reviewNotes: "",
             completedAt: null,
             createdAt: page.createdAt || new Date().toISOString(),
