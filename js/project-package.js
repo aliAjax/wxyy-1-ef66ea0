@@ -1,6 +1,6 @@
 (function (global) {
   var PACKAGE_FORMAT = "archive-project-package";
-  var PACKAGE_VERSION = "5.0";
+  var PACKAGE_VERSION = "4.0";
   var MIN_SUPPORTED_VERSION = "1.0";
   var PACKAGE_SIZE_WARNING_THRESHOLD = 2 * 1024 * 1024;
   var MAX_PACKAGE_SIZE = 10 * 1024 * 1024;
@@ -206,30 +206,6 @@
       return p.markers.some(function (m) { return m.realX !== undefined; });
     });
 
-    var hasMigratedMarkers = pages.some(function (p) {
-      return p.markers.some(function (m) { return m.migrated; });
-    });
-
-    var calibrationSessions = [];
-    if (typeof CalibrationUI !== "undefined" && CalibrationUI.getExportData) {
-      var exportData = CalibrationUI.getExportData();
-      if (exportData && (exportData.sourcePoints.some(function (p) { return p !== null; }) || exportData.targetPoints.some(function (p) { return p !== null; }))) {
-        calibrationSessions.push({
-          id: "current-" + now.replace(/[:.]/g, "-"),
-          label: "导出时校准数据",
-          data: exportData,
-          createdAt: now
-        });
-      }
-    }
-    if (state.calibrationSessions && Array.isArray(state.calibrationSessions)) {
-      state.calibrationSessions.forEach(function (s) {
-        if (!calibrationSessions.some(function (cs) { return cs.id === s.id; })) {
-          calibrationSessions.push(s);
-        }
-      });
-    }
-
     var hasImages = pages.some(function (p) { return p.image && p.image.length > 0; });
 
     var imageRefCount = pages.filter(function (p) { return !p.imageIncluded && p.imageRef; }).length;
@@ -261,14 +237,10 @@
         typeCounts: typeCounts,
         hasImages: hasImages,
         hasRealCoords: hasRealCoords,
-        hasMigratedMarkers: hasMigratedMarkers,
-        hasCalibrationSessions: calibrationSessions.length > 0,
-        calibrationSessionCount: calibrationSessions.length,
         imageRefCount: imageRefCount,
         totalImageSizeKB: totalImageSizeKB,
       },
       pages: pages,
-      calibrationSessions: calibrationSessions,
       _meta: {
         exportedBy: "wxyy-archive-tool",
         exportOptions: {
@@ -356,17 +328,6 @@
         base.realWidth = Number(Number(m.realWidth).toFixed(2));
         base.realHeight = Number(Number(m.realHeight).toFixed(2));
       }
-    }
-    if (m.migrated) {
-      base.migrated = true;
-      if (m.sourceMarkerId) base.sourceMarkerId = m.sourceMarkerId;
-      if (m.migratedFrom) base.migratedFrom = m.migratedFrom;
-    }
-    if (m.transformType) {
-      base.transformType = m.transformType;
-    }
-    if (m.positionAdjusted) {
-      base.positionAdjusted = true;
     }
     return base;
   }
@@ -946,7 +907,6 @@
       createdAt: proj.createdAt || now,
       updatedAt: now,
       damageTypes: packageData.damageTypes,
-      calibrationSessions: packageData.calibrationSessions || [],
     };
   }
 

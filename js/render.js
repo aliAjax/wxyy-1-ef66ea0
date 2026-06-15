@@ -72,11 +72,22 @@
     migrationLayerSimple: null,
     calibrationLayer: null,
     calibrationLayerSimple: null,
+    filterType: null,
+    filterMode: null,
+    filterKeyword: null,
+    clearFilterBtn: null,
   };
 
   let viewerMode = false;
   let imageViewer = null;
   let pendingDeleteTypeId = null;
+
+  let filterState = {
+    typeId: "all",
+    mode: "all",
+    keyword: "",
+  };
+  let selectedMarkerId = null;
 
   function initDoms() {
     Doms.volumeId = document.getElementById("volumeId");
@@ -148,6 +159,10 @@
     Doms.migrationLayerSimple = document.getElementById("migrationLayerSimple");
     Doms.calibrationLayer = document.getElementById("calibrationLayer");
     Doms.calibrationLayerSimple = document.getElementById("calibrationLayerSimple");
+    Doms.filterType = document.getElementById("filterType");
+    Doms.filterMode = document.getElementById("filterMode");
+    Doms.filterKeyword = document.getElementById("filterKeyword");
+    Doms.clearFilterBtn = document.getElementById("clearFilterBtn");
   }
 
   function escapeHtml(str) {
@@ -167,6 +182,80 @@
     if (byName) return byName.color;
     const fallback = State.damageTypes && State.damageTypes[0];
     return fallback ? fallback.color : "#9d3f2f";
+  }
+
+  function getFilteredMarkers() {
+    const page = State.currentPage;
+    if (!page || !page.markers) return [];
+
+    const { typeId, mode, keyword } = filterState;
+    const keywordLower = keyword.trim().toLowerCase();
+
+    return page.markers.filter((m) => {
+      if (typeId !== "all" && m.typeId !== typeId) {
+        return false;
+      }
+      if (mode !== "all" && m.mode !== mode) {
+        return false;
+      }
+      if (keywordLower && !(m.note || "").toLowerCase().includes(keywordLower)) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  function renderFilterTypeOptions() {
+    if (!Doms.filterType) return;
+    const types = State.damageTypes;
+    const prevValue = Doms.filterType.value;
+    Doms.filterType.innerHTML =
+      '<option value="all">全部类型</option>' +
+      types
+        .map((t) => {
+          return `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`;
+        })
+        .join("");
+    if (prevValue && (prevValue === "all" || types.some((t) => t.id === prevValue))) {
+      Doms.filterType.value = prevValue;
+    } else {
+      Doms.filterType.value = "all";
+    }
+  }
+
+  function setFilterType(typeId) {
+    filterState.typeId = typeId;
+    if (Doms.filterType) Doms.filterType.value = typeId;
+    renderMarkers();
+    renderMarkerList();
+  }
+
+  function setFilterMode(mode) {
+    filterState.mode = mode;
+    if (Doms.filterMode) Doms.filterMode.value = mode;
+    renderMarkers();
+    renderMarkerList();
+  }
+
+  function setFilterKeyword(keyword) {
+    filterState.keyword = keyword;
+    renderMarkers();
+    renderMarkerList();
+  }
+
+  function clearFilter() {
+    filterState = { typeId: "all", mode: "all", keyword: "" };
+    if (Doms.filterType) Doms.filterType.value = "all";
+    if (Doms.filterMode) Doms.filterMode.value = "all";
+    if (Doms.filterKeyword) Doms.filterKeyword.value = "";
+    renderMarkers();
+    renderMarkerList();
+  }
+
+  function setSelectedMarker(markerId) {
+    selectedMarkerId = markerId;
+    renderMarkers();
+    renderMarkerList();
   }
 
   function initImageViewer() {
@@ -354,10 +443,11 @@
     }
 
     const migrCls = marker.migrated ? " migrated" : "";
+    const selectedCls = marker.id === selectedMarkerId ? " selected" : "";
 
     if (marker.mode === "region") {
       return `
-        <span class="region-marker${migrCls}"
+        <span class="region-marker${migrCls}${selectedCls}"
               data-type="${escapeHtml(typeInfo.name)}"
               data-type-id="${marker.typeId}"
               data-marker="${marker.id}"
@@ -368,7 +458,7 @@
       `;
     }
     return `
-      <span class="marker${migrCls}"
+      <span class="marker${migrCls}${selectedCls}"
             data-type="${escapeHtml(typeInfo.name)}"
             data-type-id="${marker.typeId}"
             data-marker="${marker.id}"
@@ -383,15 +473,17 @@
 
     if (!page || !page.image || !markersLayer) return;
 
+    const filteredMarkers = getFilteredMarkers();
+
     if (viewerMode && imageViewer && imageViewer.imageLoaded) {
-      markersLayer.innerHTML = page.markers
+      markersLayer.innerHTML = filteredMarkers
         .map((m) => {
           const style = imageViewer.getMarkerStageStyle(m);
           return renderMarkerHtml(m, style);
         })
         .join("");
     } else {
-      markersLayer.innerHTML = page.markers
+      markersLayer.innerHTML = filteredMarkers
         .map((m) => {
           if (m.mode === "region") {
             return renderMarkerHtml(m, {
@@ -642,11 +734,25 @@
     const page = State.currentPage;
     if (!page || page.markers.length === 0) {
       Doms.markerList.innerHTML =
-        '<p style="color:var(--muted);text-align:center;padding:24px 8px;font-size:13px;">本页暂无损伤记录。</p>';
+        '<div class="marker-empty">本页暂无损伤记录。</div>';
       return;
     }
 
-    Doms.markerList.innerHTML = page.markers
+    const filteredMarkers = getFilteredMarkers();
+    const totalCount = page.markers.length;
+
+    if (filteredMarkers.length === 0) {
+      Doms.markerList.innerHTML =
+        '<div class="marker-empty filtered-empty">' +
+          '<div class="empty-icon">🔍</div>' +
+          '<div class="empty-title">没有符合筛选条件的记录</div>' +
+          '<div class="empty-desc">共 ' + totalCount + ' 条记录，当前筛选条件下无匹配结果</div>' +
+          '<button type="button" class="clear-filter-inline" id="clearFilterInlineBtn">清除筛选条件</button>' +
+        '</div>';
+      return;
+    }
+
+    Doms.markerList.innerHTML = filteredMarkers
       .map((marker, index) => {
         const typeInfo = State.findTypeById(marker.typeId) || {
           name: marker.type,
@@ -668,6 +774,8 @@
         const migrTag = marker.migrated
           ? '<span class="record-mode mode-migrated">迁移</span>'
           : '';
+        const isSelected = marker.id === selectedMarkerId;
+        const selectedCls = isSelected ? ' selected' : '';
 
         let dims = "";
         if (isRegion) {
@@ -684,7 +792,7 @@
         }
 
         return `
-          <article class="record">
+          <article class="record${selectedCls}" data-marker="${marker.id}">
             <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}${migrTag}</strong>
             <p>${note}${dims}${coords}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
             <button type="button" data-delete="${marker.id}">删除</button>
@@ -906,7 +1014,18 @@
   }
 
   function renderAll() {
+    const page = State.currentPage;
+    if (selectedMarkerId && page) {
+      const exists = page.markers.some((m) => m.id === selectedMarkerId);
+      if (!exists) {
+        selectedMarkerId = null;
+      }
+    }
+    if (!page) {
+      selectedMarkerId = null;
+    }
     renderTypeInput();
+    renderFilterTypeOptions();
     renderVolumeMeta();
     renderPagesList();
     renderCanvas();
@@ -994,24 +1113,27 @@
       State.setVolumeMeta({ volumeTitle: Doms.volumeTitle.value });
     });
 
-    Doms.markersLayer.addEventListener("click", (event) => {
-      const markerEl = event.target.closest("[data-marker]");
-      if (!markerEl) return;
-      const id = markerEl.dataset.marker;
-      if (confirm("删除此标记？")) State.removeMarker(id);
-    });
-
-    Doms.markersLayerSimple.addEventListener("click", (event) => {
-      const markerEl = event.target.closest("[data-marker]");
-      if (!markerEl) return;
-      const id = markerEl.dataset.marker;
-      if (confirm("删除此标记？")) State.removeMarker(id);
-    });
-
     Doms.markerList.addEventListener("click", (event) => {
-      const id = event.target.dataset.delete;
-      if (!id) return;
-      State.removeMarker(id);
+      const deleteBtn = event.target.closest("[data-delete]");
+      if (deleteBtn) {
+        event.stopPropagation();
+        const id = deleteBtn.dataset.delete;
+        if (confirm("删除此标记？")) State.removeMarker(id);
+        return;
+      }
+      const recordEl = event.target.closest("[data-marker]");
+      if (recordEl) {
+        const id = recordEl.dataset.marker;
+        if (selectedMarkerId === id) {
+          setSelectedMarker(null);
+        } else {
+          setSelectedMarker(id);
+        }
+      }
+      const clearInlineBtn = event.target.closest("#clearFilterInlineBtn");
+      if (clearInlineBtn) {
+        clearFilter();
+      }
     });
 
     Doms.typeConfigList.addEventListener("input", (event) => {
@@ -1133,6 +1255,52 @@
     if (Doms.exitViewerBtn) {
       Doms.exitViewerBtn.addEventListener("click", () => setViewerMode(false));
     }
+
+    if (Doms.filterType) {
+      Doms.filterType.addEventListener("change", (e) => {
+        setFilterType(e.target.value);
+      });
+    }
+
+    if (Doms.filterMode) {
+      Doms.filterMode.addEventListener("change", (e) => {
+        setFilterMode(e.target.value);
+      });
+    }
+
+    if (Doms.filterKeyword) {
+      let keywordTimeout = null;
+      Doms.filterKeyword.addEventListener("input", (e) => {
+        if (keywordTimeout) clearTimeout(keywordTimeout);
+        keywordTimeout = setTimeout(() => {
+          setFilterKeyword(e.target.value);
+        }, 150);
+      });
+    }
+
+    if (Doms.clearFilterBtn) {
+      Doms.clearFilterBtn.addEventListener("click", clearFilter);
+    }
+
+    const handleMarkerClick = (event) => {
+      const markerEl = event.target.closest("[data-marker]");
+      if (!markerEl) return;
+      const id = markerEl.dataset.marker;
+      if (event.detail === 2) {
+        event.preventDefault();
+        if (confirm("删除此标记？")) State.removeMarker(id);
+      } else {
+        event.stopPropagation();
+        if (selectedMarkerId === id) {
+          setSelectedMarker(null);
+        } else {
+          setSelectedMarker(id);
+        }
+      }
+    };
+
+    Doms.markersLayer.addEventListener("click", handleMarkerClick);
+    Doms.markersLayerSimple.addEventListener("click", handleMarkerClick);
   }
 
   const VolumeRender = {

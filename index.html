@@ -11,7 +11,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Archive Volume Damage</p>
-        <h1>古籍纸张虫蛀标记<span class="tq-context-indicator" id="currentTaskIndicator" style="display:none;"></span></h1>
+        <h1>古籍纸张虫蛀标记</h1>
       </div>
       <div class="volume-meta">
         <label class="meta-field">
@@ -25,13 +25,8 @@
       </div>
       <div class="actions">
         <button id="viewerModeBtn" type="button" title="切换超大扫描页查看器模式" class="primary">🔍 超大查看器</button>
-        <button id="autoDetectBtn" type="button" title="自动识别虫蛀候选">🔮 智能识别</button>
         <button id="configBtn" type="button" title="配置损伤类型">⚙ 类型配置</button>
         <button id="reviewBtn" type="button" title="进入复核工作台">复核工作台</button>
-        <button id="diffBtn" type="button" title="双人标注差异比对">🔍 差异比对</button>
-        <button id="taskQueueBtn" type="button" title="离线审校任务队列">📋 任务队列</button>
-        <button id="calibrationBtn" type="button" title="跨页校准与标记迁移">📐 跨页校准</button>
-        <a href="calibration.html" class="topbar-link" title="打开跨页校准专页（双页并排视图）">📐 校准专页</a>
         <button id="exportBtn" type="button" title="导出项目工作包">📦 导出</button>
         <button id="importBtn" type="button" title="导入项目工作包">📥 导入</button>
         <input id="importFileInput" type="file" accept=".json" style="display:none;" />
@@ -108,9 +103,6 @@
               <div class="empty" id="emptyState">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
               <img id="pageImage" alt="古籍扫描页" />
               <div id="markers" class="markers"></div>
-              <div id="candidateLayer" class="candidate-layer"></div>
-              <div id="migrationLayer" class="migration-layer"></div>
-              <div id="calibrationLayer" class="calibration-layer"></div>
               <div id="dragOverlay" class="drag-overlay"></div>
             </div>
           </div>
@@ -120,9 +112,6 @@
           <div class="empty" id="emptyStateSimple">请在左侧导入扫描页后，点击此区域即可标记损伤</div>
           <img id="pageImageSimple" alt="古籍扫描页" />
           <div id="markersSimple" class="markers"></div>
-          <div id="candidateLayerSimple" class="candidate-layer"></div>
-          <div id="migrationLayerSimple" class="migration-layer"></div>
-          <div id="calibrationLayerSimple" class="calibration-layer"></div>
           <div id="dragOverlaySimple" class="drag-overlay"></div>
         </div>
 
@@ -133,76 +122,20 @@
         </div>
       </section>
 
-      <aside class="panel candidate-panel">
-        <div class="candidate-panel-header">
-          <h2>🔮 智能识别候选</h2>
-          <button id="candidateToggleBtn" type="button" class="icon-btn" title="显示/隐藏候选标记">👁</button>
-        </div>
-
-        <div class="candidate-controls">
-          <label class="candidate-control-row">
-            <span>检测灵敏度</span>
-            <div class="slider-row">
-              <input type="range" id="candidateSensitivity" min="1" max="100" value="50" />
-              <span id="sensitivityValue">50</span>
-            </div>
-          </label>
-
-          <label class="candidate-control-row">
-            <span>检测边缘破损</span>
-            <input type="checkbox" id="detectEdgeDamage" checked />
-          </label>
-
-          <label class="candidate-control-row">
-            <span>最大候选数</span>
-            <select id="maxCandidatesSelect">
-              <option value="50">50 个</option>
-              <option value="100">100 个</option>
-              <option value="200" selected>200 个</option>
-              <option value="500">500 个</option>
-            </select>
-          </label>
-
-          <button id="runDetectBtn" type="button" class="primary full-width">
-            🔍 开始检测
-          </button>
-        </div>
-
-        <div class="candidate-stats" id="candidateStats">
-          <div class="cand-stat">
-            <span class="cand-stat-label">待处理</span>
-            <span class="cand-stat-value pending" id="candPending">0</span>
-          </div>
-          <div class="cand-stat">
-            <span class="cand-stat-label">已接受</span>
-            <span class="cand-stat-value accepted" id="candAccepted">0</span>
-          </div>
-          <div class="cand-stat">
-            <span class="cand-stat-label">已忽略</span>
-            <span class="cand-stat-value ignored" id="candIgnored">0</span>
-          </div>
-        </div>
-
-        <div class="candidate-batch-actions">
-          <button id="acceptAllBtn" type="button" class="small-btn">✓ 全部接受</button>
-          <button id="ignoreAllBtn" type="button" class="small-btn">✕ 全部忽略</button>
-          <button id="applyAcceptedBtn" type="button" class="primary small-btn">➜ 应用到标记</button>
-        </div>
-
-        <div class="candidate-filter-tabs" id="candidateFilterTabs">
-          <button type="button" class="cand-filter-tab active" data-filter="all">全部</button>
-          <button type="button" class="cand-filter-tab" data-filter="pending">待处理</button>
-          <button type="button" class="cand-filter-tab" data-filter="accepted">已接受</button>
-          <button type="button" class="cand-filter-tab" data-filter="ignored">已忽略</button>
-        </div>
-
-        <div id="candidateList" class="candidate-list">
-          <p class="candidate-empty">导入扫描页后点击「开始检测」自动识别虫蛀候选</p>
-        </div>
-      </aside>
-
       <aside class="panel list-panel">
         <h2>本页损伤记录</h2>
+        <div class="marker-filter-bar">
+          <select id="filterType" class="filter-select" title="按损伤类型筛选">
+            <option value="all">全部类型</option>
+          </select>
+          <select id="filterMode" class="filter-select" title="按标注模式筛选">
+            <option value="all">全部模式</option>
+            <option value="point">点标记</option>
+            <option value="region">区域标注</option>
+          </select>
+          <input type="text" id="filterKeyword" class="filter-input" placeholder="搜索备注关键词…" title="按备注关键词搜索" />
+          <button type="button" id="clearFilterBtn" class="clear-filter-btn" title="清除筛选">✕</button>
+        </div>
         <div id="markerList" class="marker-list"></div>
       </aside>
     </section>
@@ -326,239 +259,11 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="calibrationModal" style="display:none;">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>📐 跨页位置校准与标记迁移</h2>
-        <button class="modal-close" id="closeCalibrationBtn" type="button">×</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-hint">选择源页面（已有标记）和目标页面（当前页），分别在两张页面上点选 4 个对应校准点，系统将自动把源页面的标记投影到目标页面。</p>
-
-        <div class="calib-page-select">
-          <label class="calib-page-field">
-            <span>源页面（标记来源）</span>
-            <select id="calibSourcePage"></select>
-          </label>
-          <label class="calib-page-field">
-            <span>目标页面（迁移目标）</span>
-            <select id="calibTargetPage"></select>
-          </label>
-        </div>
-
-        <div class="calib-points-section">
-          <h3>校准点选取</h3>
-          <p class="calib-points-hint">点击下方按钮进入选点模式，然后在对应页面的图片上点击选取校准点。两张页面需选取相同的特征位置。</p>
-          <div class="calib-points-grid">
-            <div class="calib-points-column">
-              <div class="calib-column-title">源页面校准点</div>
-              <div class="calib-point-row" data-calib-side="source" data-calib-index="0"><span class="calib-point-num">S1</span><span class="calib-point-coord" id="calibSrc0">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="source-0">选点</button></div>
-              <div class="calib-point-row" data-calib-side="source" data-calib-index="1"><span class="calib-point-num">S2</span><span class="calib-point-coord" id="calibSrc1">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="source-1">选点</button></div>
-              <div class="calib-point-row" data-calib-side="source" data-calib-index="2"><span class="calib-point-num">S3</span><span class="calib-point-coord" id="calibSrc2">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="source-2">选点</button></div>
-              <div class="calib-point-row" data-calib-side="source" data-calib-index="3"><span class="calib-point-num">S4</span><span class="calib-point-coord" id="calibSrc3">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="source-3">选点</button></div>
-            </div>
-            <div class="calib-points-column">
-              <div class="calib-column-title">目标页面校准点</div>
-              <div class="calib-point-row" data-calib-side="target" data-calib-index="0"><span class="calib-point-num">T1</span><span class="calib-point-coord" id="calibDst0">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="target-0">选点</button></div>
-              <div class="calib-point-row" data-calib-side="target" data-calib-index="1"><span class="calib-point-num">T2</span><span class="calib-point-coord" id="calibDst1">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="target-1">选点</button></div>
-              <div class="calib-point-row" data-calib-side="target" data-calib-index="2"><span class="calib-point-num">T3</span><span class="calib-point-coord" id="calibDst2">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="target-2">选点</button></div>
-              <div class="calib-point-row" data-calib-side="target" data-calib-index="3"><span class="calib-point-num">T4</span><span class="calib-point-coord" id="calibDst3">未选取</span><button type="button" class="small-btn calib-pick-btn" data-pick="target-3">选点</button></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="calib-actions-bar">
-          <button id="calibGenerateBtn" type="button" class="primary">🔄 计算变换并生成迁移候选</button>
-          <button id="calibResetBtn" type="button">重置校准</button>
-        </div>
-
-        <div id="calibResult" class="calib-result" style="display:none;"></div>
-
-        <div class="calib-migration-section" id="calibMigrationSection" style="display:none;">
-          <h3>迁移候选标记</h3>
-          <div class="calib-migration-stats" id="calibMigrationStats">
-            <div class="cand-stat"><span class="cand-stat-label">待确认</span><span class="cand-stat-value pending" id="migrPending">0</span></div>
-            <div class="cand-stat"><span class="cand-stat-label">已接受</span><span class="cand-stat-value accepted" id="migrAccepted">0</span></div>
-            <div class="cand-stat"><span class="cand-stat-label">已拒绝</span><span class="cand-stat-value ignored" id="migrRejected">0</span></div>
-          </div>
-          <div class="calib-migration-batch">
-            <button id="migrAcceptAllBtn" type="button" class="small-btn">✓ 全部接受</button>
-            <button id="migrRejectAllBtn" type="button" class="small-btn">✕ 全部拒绝</button>
-            <button id="migrApplyBtn" type="button" class="primary small-btn">➜ 应用已接受</button>
-          </div>
-          <div id="migrationList" class="migration-list"></div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="closeCalibrationFooterBtn" type="button">关闭</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="taskQueueModal" style="display:none;">
-    <div class="modal modal-task-queue">
-      <div class="modal-header">
-        <h2>📋 离线审校任务队列</h2>
-        <button class="modal-close" id="closeTaskQueueBtn" type="button">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="tq-stats" id="tqStats">
-          <div class="tq-stat-card"><span class="tq-stat-label">待标注</span><span class="tq-stat-value" id="tqPending">0</span></div>
-          <div class="tq-stat-card tq-stat-progress"><span class="tq-stat-label">标注中</span><span class="tq-stat-value" id="tqInProgress">0</span></div>
-          <div class="tq-stat-card tq-stat-done"><span class="tq-stat-label">已完成</span><span class="tq-stat-value" id="tqCompleted">0</span></div>
-        </div>
-
-        <div class="tq-toolbar">
-          <input type="text" id="tqSearch" placeholder="搜索页名或备注…" class="tq-search" />
-          <select id="tqFilter" class="tq-filter">
-            <option value="all">全部状态</option>
-            <option value="pending">待标注</option>
-            <option value="in_progress">标注中</option>
-            <option value="completed">已完成</option>
-          </select>
-          <button type="button" id="tqCreateBtn" class="primary">＋ 新建任务</button>
-        </div>
-
-        <div id="tqListEmpty" class="tq-list-empty">尚未创建任何审校任务。点击「新建任务」开始。</div>
-        <div id="tqList" class="tq-list"></div>
-
-        <div class="tq-batch-bar">
-          <button type="button" id="tqExportAllBtn" class="small-btn">📦 整批导出</button>
-          <button type="button" id="tqClearDoneBtn" class="small-btn">🗑 清除已完成</button>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="closeTaskQueueFooterBtn" type="button">关闭</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="taskCreateModal" style="display:none;">
-    <div class="modal modal-small">
-      <div class="modal-header">
-        <h2>新建审校任务</h2>
-        <button class="modal-close" id="closeTaskCreateBtn" type="button">×</button>
-      </div>
-      <div class="modal-body">
-        <label>
-          <span>页面名称</span>
-          <input type="text" id="taskPageName" placeholder="如：卷三·第七页" maxlength="60" />
-        </label>
-        <label>
-          <span>优先级</span>
-          <select id="taskPriority">
-            <option value="high">高</option>
-            <option value="normal" selected>普通</option>
-            <option value="low">低</option>
-          </select>
-        </label>
-        <label>
-          <span>关联已有页面（可选）</span>
-          <select id="taskLinkPage">
-            <option value="">不关联</option>
-          </select>
-        </label>
-        <label>
-          <span>导入扫描图片（可选）</span>
-          <input type="file" id="taskImageInput" accept="image/*" style="font-size:12px;" />
-        </label>
-      </div>
-      <div class="modal-footer">
-        <button id="cancelTaskCreateBtn" type="button">取消</button>
-        <button id="confirmTaskCreateBtn" type="button" class="primary">创建任务</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="taskEditModal" style="display:none;">
-    <div class="modal modal-small">
-      <div class="modal-header">
-        <h2>编辑审校任务</h2>
-        <button class="modal-close" id="closeTaskEditBtn" type="button">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="tq-edit-form">
-          <label>
-            <span>页面名称</span>
-            <input type="text" id="editTaskPageName" placeholder="如：卷三·第七页" maxlength="60" />
-          </label>
-          <label>
-            <span>优先级</span>
-            <div class="tq-priority-select" id="editTaskPriority">
-              <div class="tq-priority-option" data-priority="high">
-                <span class="tq-priority-dot high"></span>
-                <span>高</span>
-              </div>
-              <div class="tq-priority-option" data-priority="normal">
-                <span class="tq-priority-dot normal"></span>
-                <span>普通</span>
-              </div>
-              <div class="tq-priority-option" data-priority="low">
-                <span class="tq-priority-dot low"></span>
-                <span>低</span>
-              </div>
-            </div>
-          </label>
-          <label>
-            <span>复核备注</span>
-            <textarea id="editTaskReviewNotes" placeholder="添加复核备注，如：已复核，标记准确" maxlength="500"></textarea>
-          </label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="cancelTaskEditBtn" type="button">取消</button>
-        <button id="confirmTaskEditBtn" type="button" class="primary">保存修改</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="taskExportModal" style="display:none;">
-    <div class="modal tq-export-modal">
-      <div class="modal-header">
-        <h2>📦 导出任务队列</h2>
-        <button class="modal-close" id="closeTaskExportBtn" type="button">×</button>
-      </div>
-      <div class="modal-body">
-        <div id="tqExportSummary" class="tq-export-summary"></div>
-        <p class="modal-hint">选择要导出的任务状态和选项：</p>
-        <div class="tq-export-options">
-          <div class="tq-export-option">
-            <input type="checkbox" id="exportPending" checked />
-            <label for="exportPending">待标注任务</label>
-          </div>
-          <div class="tq-export-option">
-            <input type="checkbox" id="exportInProgress" checked />
-            <label for="exportInProgress">标注中任务</label>
-          </div>
-          <div class="tq-export-option">
-            <input type="checkbox" id="exportCompleted" checked />
-            <label for="exportCompleted">已完成任务</label>
-          </div>
-          <div class="tq-export-option">
-            <input type="checkbox" id="tqExportIncludeImages" checked />
-            <label for="tqExportIncludeImages">包含扫描图片数据</label>
-            <span class="export-option-hint" id="tqExportImageHint"></span>
-          </div>
-        </div>
-        <div id="tqExportSizeEstimate" class="export-size-estimate"></div>
-      </div>
-      <div class="modal-footer">
-        <button id="cancelTaskExportBtn" type="button">取消</button>
-        <button id="confirmTaskExportBtn" type="button" class="primary">确认导出</button>
-      </div>
-    </div>
-  </div>
-
   <div id="toastContainer" class="toast-container"></div>
 
   <script src="./js/storage.js"></script>
-  <script src="./js/task-queue.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/project-package.js"></script>
-  <script src="./js/candidate-detector.js"></script>
-  <script src="./js/candidate-manager.js"></script>
-  <script src="./js/calibration.js"></script>
-  <script src="./js/calibration-ui.js"></script>
   <script src="./js/render.js"></script>
   <script src="./js/image-viewer.js"></script>
   <script src="./app.js"></script>
