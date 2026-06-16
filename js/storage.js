@@ -1,4 +1,11 @@
 (function (global) {
+  if (typeof global.structuredClone !== "function") {
+    global.structuredClone = function (value) {
+      return JSON.parse(JSON.stringify(value));
+    };
+  }
+
+  const cloneValue = global.structuredClone;
   const STORAGE_KEY = "wxyy-1-archive-volume";
   const MODES = ["point", "region"];
 
@@ -23,7 +30,7 @@
     currentPageId: null,
     createdAt: null,
     updatedAt: null,
-    damageTypes: structuredClone(DEFAULT_DAMAGE_TYPES),
+    damageTypes: cloneValue(DEFAULT_DAMAGE_TYPES),
   };
 
   function readRaw() {
@@ -58,7 +65,7 @@
     ) {
       return raw.damageTypes;
     }
-    return structuredClone(DEFAULT_DAMAGE_TYPES);
+    return cloneValue(DEFAULT_DAMAGE_TYPES);
   }
 
   function lookupTypeId(legacyTypeName, damageTypes) {
@@ -144,11 +151,11 @@
 
   function normalizeState(raw) {
     if (!raw || typeof raw !== "object") {
-      return structuredClone(DEFAULT_STATE);
+      return cloneValue(DEFAULT_STATE);
     }
 
     const damageTypes = ensureDamageTypes(raw);
-    const state = Object.assign(structuredClone(DEFAULT_STATE), raw);
+    const state = Object.assign(cloneValue(DEFAULT_STATE), raw);
     state.damageTypes = damageTypes;
     state.pages = Array.isArray(state.pages)
       ? state.pages.map((p) => normalizePage(p, damageTypes)).filter(Boolean)
@@ -187,7 +194,7 @@
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
-      structuredClone(DEFAULT_DAMAGE_TYPES)
+      cloneValue(DEFAULT_DAMAGE_TYPES)
     );
   }
 
@@ -481,10 +488,10 @@
 
     reset() {
       const now = new Date().toISOString();
-      const fresh = Object.assign(structuredClone(DEFAULT_STATE), {
+      const fresh = Object.assign(cloneValue(DEFAULT_STATE), {
         createdAt: now,
         updatedAt: now,
-        damageTypes: structuredClone(DEFAULT_DAMAGE_TYPES),
+        damageTypes: cloneValue(DEFAULT_DAMAGE_TYPES),
       });
       writeRaw(fresh);
       return fresh;
@@ -507,7 +514,7 @@
     restoreFromPackage,
 
     export(state) {
-      const damageTypes = state.damageTypes || structuredClone(DEFAULT_DAMAGE_TYPES);
+      const damageTypes = state.damageTypes || cloneValue(DEFAULT_DAMAGE_TYPES);
       const typeMap = Object.fromEntries(damageTypes.map((t) => [t.id, t]));
 
       const pages = state.pages.map((p) => {
