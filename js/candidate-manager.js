@@ -78,10 +78,14 @@
         detectEdge: state.detectEdge,
       });
 
-      state.candidates = result.candidates.map((c) => ({
-        ...c,
-        status: CANDIDATE_STATUS.PENDING,
-      }));
+      state.candidates = result.candidates.map((c) => {
+        const conf = Number(c.confidence);
+        return {
+          ...c,
+          status: CANDIDATE_STATUS.PENDING,
+          confidence: isNaN(conf) ? 0.5 : Math.max(0, Math.min(1, conf)),
+        };
+      });
       state.lastDetectResult = result;
       state.isDetecting = false;
       _notify();
@@ -178,9 +182,12 @@
   }
 
   function acceptByConfidence(minConfidence) {
+    const threshold = Math.max(0, Math.min(1, Number(minConfidence) || 0));
     let count = 0;
     state.candidates.forEach((c) => {
-      if (c.status === CANDIDATE_STATUS.PENDING && c.confidence >= minConfidence) {
+      const conf = Number(c.confidence);
+      const validConf = isNaN(conf) ? 0 : conf;
+      if (c.status === CANDIDATE_STATUS.PENDING && validConf >= threshold) {
         c.status = CANDIDATE_STATUS.ACCEPTED;
         c.acceptedAt = new Date().toISOString();
         count++;
@@ -295,10 +302,14 @@
   }
 
   function setCandidates(candidates) {
-    state.candidates = (candidates || []).map((c) => ({
-      ...c,
-      status: c.status || CANDIDATE_STATUS.PENDING,
-    }));
+    state.candidates = (candidates || []).map((c) => {
+      const conf = Number(c.confidence);
+      return {
+        ...c,
+        status: c.status || CANDIDATE_STATUS.PENDING,
+        confidence: isNaN(conf) ? 0.5 : Math.max(0, Math.min(1, conf)),
+      };
+    });
     state.lastDetectResult = { candidates: state.candidates.slice() };
     _notify();
   }
