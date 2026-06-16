@@ -3947,6 +3947,15 @@ button.primary:hover {
   gap: 6px;
 }
 
+.candidate-confidence-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .small-btn {
   min-height: 32px;
   padding: 0 8px;

@@ -76,6 +76,9 @@
     filterMode: null,
     filterKeyword: null,
     clearFilterBtn: null,
+    confidenceThreshold: null,
+    confidenceThresholdValue: null,
+    acceptByConfidenceBtn: null,
   };
 
   let viewerMode = false;
@@ -163,6 +166,9 @@
     Doms.filterMode = document.getElementById("filterMode");
     Doms.filterKeyword = document.getElementById("filterKeyword");
     Doms.clearFilterBtn = document.getElementById("clearFilterBtn");
+    Doms.confidenceThreshold = document.getElementById("confidenceThreshold");
+    Doms.confidenceThresholdValue = document.getElementById("confidenceThresholdValue");
+    Doms.acceptByConfidenceBtn = document.getElementById("acceptByConfidenceBtn");
   }
 
   function escapeHtml(str) {

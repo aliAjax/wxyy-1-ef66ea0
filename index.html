@@ -189,6 +189,19 @@
           <button id="applyAcceptedBtn" type="button" class="primary small-btn">➜ 应用到标记</button>
         </div>
 
+        <div class="candidate-confidence-section">
+          <label class="candidate-control-row">
+            <span>最低置信度</span>
+            <div class="slider-row">
+              <input type="range" id="confidenceThreshold" min="0" max="100" value="70" />
+              <span id="confidenceThresholdValue">70%</span>
+            </div>
+          </label>
+          <button id="acceptByConfidenceBtn" type="button" class="small-btn full-width">
+            🎯 按置信度批量接受
+          </button>
+        </div>
+
         <div class="candidate-filter-tabs" id="candidateFilterTabs">
           <button type="button" class="cand-filter-tab active" data-filter="all">全部</button>
           <button type="button" class="cand-filter-tab" data-filter="pending">待处理</button>

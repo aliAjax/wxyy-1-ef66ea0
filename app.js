@@ -31,6 +31,9 @@
   const applyAcceptedBtn = document.getElementById("applyAcceptedBtn");
   const candidateList = document.getElementById("candidateList");
   const candidateFilterTabs = document.getElementById("candidateFilterTabs");
+  const confidenceThreshold = document.getElementById("confidenceThreshold");
+  const confidenceThresholdValue = document.getElementById("confidenceThresholdValue");
+  const acceptByConfidenceBtn = document.getElementById("acceptByConfidenceBtn");
 
   const calibrationBtn = document.getElementById("calibrationBtn");
   const calibrationModal = document.getElementById("calibrationModal");
@@ -986,6 +989,12 @@
     }
   }
 
+  function updateConfidenceThresholdDisplay() {
+    if (confidenceThreshold && confidenceThresholdValue) {
+      confidenceThresholdValue.textContent = confidenceThreshold.value + "%";
+    }
+  }
+
   async function runCandidateDetection() {
     const page = State.currentPage;
     if (!page || !page.image) {
@@ -1063,6 +1072,23 @@
       Render.refresh();
     } else {
       showToast("没有待处理的候选", "info");
+    }
+  }
+
+  function acceptByConfidenceCandidates() {
+    if (!CandidateManager) return;
+
+    const thresholdPercent = confidenceThreshold
+      ? parseInt(confidenceThreshold.value, 10)
+      : 70;
+    const minConfidence = thresholdPercent / 100;
+
+    const count = CandidateManager.acceptByConfidence(minConfidence);
+    if (count > 0) {
+      showToast(`已接受 ${count} 个置信度 ≥ ${thresholdPercent}% 的候选`, "success");
+      Render.refresh();
+    } else {
+      showToast(`没有置信度 ≥ ${thresholdPercent}% 的待处理候选`, "info");
     }
   }
 
@@ -2106,6 +2132,10 @@
       candidateSensitivity.addEventListener("input", updateSensitivityDisplay);
     }
 
+    if (confidenceThreshold) {
+      confidenceThreshold.addEventListener("input", updateConfidenceThresholdDisplay);
+    }
+
     if (runDetectBtn) {
       runDetectBtn.addEventListener("click", runCandidateDetection);
     }
@@ -2116,6 +2146,10 @@
 
     if (ignoreAllBtn) {
       ignoreAllBtn.addEventListener("click", ignoreAllPendingCandidates);
+    }
+
+    if (acceptByConfidenceBtn) {
+      acceptByConfidenceBtn.addEventListener("click", acceptByConfidenceCandidates);
     }
 
     if (applyAcceptedBtn) {
@@ -2350,6 +2384,7 @@
     bindEvents();
     setMode("point");
     updateSensitivityDisplay();
+    updateConfidenceThresholdDisplay();
     updateCurrentTaskIndicator();
   }
 
