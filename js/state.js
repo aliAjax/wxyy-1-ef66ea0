@@ -669,6 +669,34 @@
       return marker;
     },
 
+    updateCandidateSummary(pageId, summary) {
+      const page = pageId
+        ? this._state.pages.find((p) => p.id === pageId)
+        : this.currentPage;
+      if (!page) return false;
+      page.candidateSummary = {
+        total: summary.total || 0,
+        pending: summary.pending || 0,
+        accepted: summary.accepted || 0,
+        ignored: summary.ignored || 0,
+        updatedAt: new Date().toISOString(),
+      };
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    clearCandidateSummary(pageId) {
+      const page = pageId
+        ? this._state.pages.find((p) => p.id === pageId)
+        : this.currentPage;
+      if (!page) return false;
+      delete page.candidateSummary;
+      this._persist();
+      this._notify();
+      return true;
+    },
+
     getMigratedMarkerCount(pageId) {
       const page = pageId
         ? this._state.pages.find((p) => p.id === pageId)
@@ -679,6 +707,46 @@
 
     getTotalMarkers() {
       return this._state.pages.reduce((acc, p) => acc + p.markers.length, 0);
+    },
+
+    getPageProgress(pageId) {
+      const page = pageId
+        ? this._state.pages.find((p) => p.id === pageId)
+        : this.currentPage;
+      if (!page) return null;
+
+      const markerCount = page.markers.length;
+      const rawCandSummary = page.candidateSummary || null;
+      const hasImage = Boolean(page.image);
+
+      const candidateStats = rawCandSummary
+        ? {
+            total: rawCandSummary.total || 0,
+            pending: rawCandSummary.pending || 0,
+            accepted: rawCandSummary.accepted || 0,
+            ignored: rawCandSummary.ignored || 0,
+            processed: (rawCandSummary.accepted || 0) + (rawCandSummary.ignored || 0),
+          }
+        : null;
+
+      let progressPercent = 0;
+      if (candidateStats && candidateStats.total > 0) {
+        progressPercent = Math.round((candidateStats.processed / candidateStats.total) * 100);
+      }
+
+      return {
+        pageId: page.id,
+        pageName: page.name || page.fileName || "",
+        markerCount,
+        hasImage,
+        candidateStats,
+        progressPercent,
+        updatedAt: page.updatedAt || null,
+      };
+    },
+
+    getAllPagesProgress() {
+      return this._state.pages.map((p) => this.getPageProgress(p.id));
     },
 
     getCalibrationData() {

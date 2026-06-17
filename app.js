@@ -1038,6 +1038,7 @@
 
       const count = (result.candidates || []).length;
       if (count > 0) {
+        syncCandidateSummaryToState();
         showToast(`检测完成，发现 ${count} 个疑似区域`, "success");
       } else {
         showToast("检测完成，未发现疑似虫蛀区域", "info");
@@ -1057,6 +1058,7 @@
     if (!CandidateManager) return;
     const count = CandidateManager.acceptAllPending();
     if (count > 0) {
+      syncCandidateSummaryToState();
       showToast(`已接受 ${count} 个候选`, "success");
       Render.refresh();
     } else {
@@ -1068,6 +1070,7 @@
     if (!CandidateManager) return;
     const count = CandidateManager.ignoreAllPending();
     if (count > 0) {
+      syncCandidateSummaryToState();
       showToast(`已忽略 ${count} 个候选`, "info");
       Render.refresh();
     } else {
@@ -1085,6 +1088,7 @@
 
     const count = CandidateManager.acceptByConfidence(minConfidence);
     if (count > 0) {
+      syncCandidateSummaryToState();
       showToast(`已接受 ${count} 个置信度 ≥ ${thresholdPercent}% 的候选`, "success");
       Render.refresh();
     } else {
@@ -1125,6 +1129,7 @@
     if (addedCount > 0) {
       showToast(`已添加 ${addedCount} 条损伤记录`, "success");
       CandidateManager.clearAccepted();
+      syncCandidateSummaryToState();
       Render.refresh();
     } else {
       showToast("未能添加任何损伤记录", "warning");
@@ -1146,6 +1151,7 @@
         break;
     }
 
+    syncCandidateSummaryToState();
     Render.refresh();
   }
 
@@ -1200,10 +1206,30 @@
     }
   }
 
+  function syncCandidateSummaryToState() {
+    if (!CandidateManager) return;
+    var page = State.currentPage;
+    if (!page) return;
+    var stats = CandidateManager.getStats();
+    if (stats.total > 0) {
+      State.updateCandidateSummary(page.id, stats);
+    } else {
+      State.clearCandidateSummary(page.id);
+    }
+  }
+
   function handlePageChange() {
     if (!CandidateManager) return;
     const currentPageId = State.currentPage ? State.currentPage.id : null;
     if (currentPageId !== lastPageId) {
+      if (lastPageId) {
+        var stats = CandidateManager.getStats();
+        if (stats.total > 0) {
+          State.updateCandidateSummary(lastPageId, stats);
+        } else {
+          State.clearCandidateSummary(lastPageId);
+        }
+      }
       CandidateManager.clearCandidates();
       lastPageId = currentPageId;
       Render.refresh();
@@ -1640,6 +1666,7 @@
         TaskQueue.setActive(taskId);
         restoreTaskDamageTypes(taskId);
         if (task.pageId) {
+          TaskQueue.syncToPage(taskId, State);
           State.switchPage(task.pageId);
         }
         renderTaskQueueList();
@@ -1658,6 +1685,7 @@
           if (nextTask) {
             restoreTaskDamageTypes(nextTask.id);
             if (nextTask.pageId) {
+              TaskQueue.syncToPage(nextTask.id, State);
               State.switchPage(nextTask.pageId);
             }
           }
@@ -1929,6 +1957,7 @@
       image: page.image,
       markers: page.markers,
       damageTypes: State.damageTypes,
+      candidateSummary: page.candidateSummary || null,
     };
     TaskQueue.syncFromPage(page.id, pageData);
   }
@@ -2368,6 +2397,7 @@
       TaskQueue.init();
       TaskQueue.subscribe(function () {
         updateCurrentTaskIndicator();
+        Render.refresh();
       });
       var activeTask = TaskQueue.activeTask;
       if (activeTask) {
@@ -2377,6 +2407,15 @@
     Render.init();
     if (CandidateManager) {
       CandidateManager.init();
+      CandidateManager.subscribe(function () {
+        if (State.currentPage) {
+          var stats = CandidateManager.getStats();
+          if (stats.total > 0) {
+            State.updateCandidateSummary(State.currentPage.id, stats);
+          }
+        }
+        Render.refresh();
+      });
     }
     if (CalibrationUI) {
       CalibrationUI.init();

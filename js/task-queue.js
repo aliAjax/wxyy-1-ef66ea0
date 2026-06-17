@@ -254,6 +254,13 @@
       if (pageData.damageTypes !== undefined) {
         task.damageTypes = JSON.parse(JSON.stringify(pageData.damageTypes));
       }
+      if (pageData.candidateSummary !== undefined) {
+        if (pageData.candidateSummary) {
+          task.candidateSummary = JSON.parse(JSON.stringify(pageData.candidateSummary));
+        } else {
+          delete task.candidateSummary;
+        }
+      }
       task.updatedAt = new Date().toISOString();
       this._persist();
       this._notify();
@@ -285,6 +292,11 @@
       if (!page) return false;
       if (task.markers) {
         page.markers = JSON.parse(JSON.stringify(task.markers));
+      }
+      if (task.candidateSummary) {
+        page.candidateSummary = JSON.parse(JSON.stringify(task.candidateSummary));
+      } else if (page.candidateSummary) {
+        delete page.candidateSummary;
       }
       page.updatedAt = new Date().toISOString();
       return true;

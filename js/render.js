@@ -384,6 +384,11 @@
   function renderPagesList() {
     const pages = State.pages;
     const currentId = State.currentPageId;
+    const tasks = window.TaskQueue ? window.TaskQueue.tasks : [];
+    const currentPageId = currentId;
+    const liveCandStats = window.CandidateManager
+      ? window.CandidateManager.getStats()
+      : null;
 
     if (pages.length === 0) {
       Doms.pagesEmpty.style.display = "block";
@@ -395,11 +400,84 @@
     Doms.pagesList.innerHTML = pages
       .map((page, index) => {
         const active = page.id === currentId ? " active" : "";
-        const count = page.markers.length;
+        const markerCount = page.markers.length;
         const thumb = page.image
           ? `<img src="${escapeHtml(page.image)}" alt="" />`
           : `<span class="thumb-placeholder">${index + 1}</span>`;
         const displayName = page.name || page.fileName || `第 ${index + 1} 页`;
+
+        let candSummary = null;
+        if (page.id === currentPageId && liveCandStats && liveCandStats.total > 0) {
+          candSummary = liveCandStats;
+        } else if (page.candidateSummary && page.candidateSummary.total > 0) {
+          candSummary = page.candidateSummary;
+        }
+
+        let candProgressHtml = "";
+        let candBadgesHtml = "";
+        if (candSummary) {
+          const total = candSummary.total || 0;
+          const pendingCount = candSummary.pending || 0;
+          const acceptedCount = candSummary.accepted || 0;
+          const ignoredCount = candSummary.ignored || 0;
+          const processed = acceptedCount + ignoredCount;
+          const progressPercent = total > 0 ? Math.round((processed / total) * 100) : 0;
+
+          candProgressHtml = `
+            <div class="page-progress-bar" title="候选处理进度：${progressPercent}%">
+              <div class="page-progress-fill" style="width: ${progressPercent}%;"></div>
+            </div>
+          `;
+
+          let candParts = [];
+          if (pendingCount > 0) {
+            candParts.push(`<span class="page-cand-badge pending" title="待处理候选：${pendingCount} 个">${pendingCount}待</span>`);
+          }
+          if (acceptedCount > 0) {
+            candParts.push(`<span class="page-cand-badge accepted" title="已接受候选：${acceptedCount} 个">${acceptedCount}受</span>`);
+          }
+          if (ignoredCount > 0) {
+            candParts.push(`<span class="page-cand-badge ignored" title="已忽略候选：${ignoredCount} 个">${ignoredCount}略</span>`);
+          }
+          if (candParts.length > 0) {
+            candBadgesHtml = `<span class="page-cand-group">${candParts.join("")}</span>`;
+          }
+        }
+
+        let taskBadgeHtml = "";
+        const task = tasks.find((t) => t.pageId === page.id);
+        if (task) {
+          const taskStatus = task.status;
+          let taskLabel = "";
+          let taskCls = taskStatus;
+          if (taskStatus === "pending") {
+            taskLabel = "待标注";
+          } else if (taskStatus === "in_progress") {
+            taskLabel = "标注中";
+          } else if (taskStatus === "completed") {
+            taskLabel = "已完成";
+          }
+          if (taskLabel) {
+            taskBadgeHtml = `<span class="page-task-badge ${taskCls}" title="任务状态：${taskLabel}">${taskLabel}</span>`;
+          }
+        }
+
+        const hasAnyInfo = markerCount > 0 || candSummary || task;
+        const summaryHtml = hasAnyInfo
+          ? `<div class="page-summary">
+              <div class="page-summary-row">
+                <span class="page-count${markerCount === 0 ? " zero" : ""}" title="损伤标记数">
+                  <span class="count-icon">◆</span>
+                  <span class="count-num">${markerCount}</span>
+                  <span class="count-label">标记</span>
+                </span>
+                ${taskBadgeHtml}
+              </div>
+              ${candProgressHtml}
+              ${candBadgesHtml ? `<div class="page-summary-row">${candBadgesHtml}</div>` : ""}
+            </div>`
+          : "";
+
         return `
           <article class="page-item${active}" data-page="${page.id}">
             <div class="page-thumb">${thumb}</div>
@@ -410,7 +488,7 @@
               </div>
               <button class="page-remove" type="button" data-remove="${page.id}" title="移除本页">×</button>
             </div>
-            <span class="page-count${count === 0 ? " zero" : ""}" title="损伤标记数">${count}</span>
+            ${summaryHtml}
           </article>
         `;
       })
