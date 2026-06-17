@@ -1127,9 +1127,8 @@
     }
 
     if (addedCount > 0) {
-      showToast(`已添加 ${addedCount} 条损伤记录`, "success");
-      CandidateManager.clearAccepted();
       syncCandidateSummaryToState();
+      CandidateManager.clearAccepted();
       Render.refresh();
     } else {
       showToast("未能添加任何损伤记录", "warning");
@@ -1206,14 +1205,17 @@
     }
   }
 
-  function syncCandidateSummaryToState() {
+  function syncCandidateSummaryToState(pageId, options) {
     if (!CandidateManager) return;
-    var page = State.currentPage;
+    options = options || {};
+    var page = pageId
+      ? State.pages.find(function (p) { return p.id === pageId; })
+      : State.currentPage;
     if (!page) return;
     var stats = CandidateManager.getStats();
     if (stats.total > 0) {
       State.updateCandidateSummary(page.id, stats);
-    } else {
+    } else if (!options.preserveExisting) {
       State.clearCandidateSummary(page.id);
     }
   }
@@ -1223,15 +1225,10 @@
     const currentPageId = State.currentPage ? State.currentPage.id : null;
     if (currentPageId !== lastPageId) {
       if (lastPageId) {
-        var stats = CandidateManager.getStats();
-        if (stats.total > 0) {
-          State.updateCandidateSummary(lastPageId, stats);
-        } else {
-          State.clearCandidateSummary(lastPageId);
-        }
+        syncCandidateSummaryToState(lastPageId, { preserveExisting: true });
       }
-      CandidateManager.clearCandidates();
       lastPageId = currentPageId;
+      CandidateManager.clearCandidates();
       Render.refresh();
     }
   }
@@ -2412,8 +2409,6 @@
           var stats = CandidateManager.getStats();
           if (stats.total > 0) {
             State.updateCandidateSummary(State.currentPage.id, stats);
-          } else if (State.currentPage.candidateSummary) {
-            State.clearCandidateSummary(State.currentPage.id);
           }
         }
         Render.refresh();
