@@ -2412,6 +2412,8 @@
           var stats = CandidateManager.getStats();
           if (stats.total > 0) {
             State.updateCandidateSummary(State.currentPage.id, stats);
+          } else if (State.currentPage.candidateSummary) {
+            State.clearCandidateSummary(State.currentPage.id);
           }
         }
         Render.refresh();

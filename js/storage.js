@@ -134,7 +134,7 @@
 
   function normalizePage(raw, damageTypes) {
     if (!raw || typeof raw !== "object" || !raw.id) return null;
-    return {
+    var page = {
       id: raw.id,
       name: raw.name || "",
       fileName: raw.fileName || "",
@@ -147,6 +147,16 @@
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString(),
     };
+    if (raw.candidateSummary && typeof raw.candidateSummary === "object") {
+      page.candidateSummary = {
+        total: raw.candidateSummary.total || 0,
+        pending: raw.candidateSummary.pending || 0,
+        accepted: raw.candidateSummary.accepted || 0,
+        ignored: raw.candidateSummary.ignored || 0,
+        updatedAt: raw.candidateSummary.updatedAt || new Date().toISOString(),
+      };
+    }
+    return page;
   }
 
   function normalizeState(raw) {
@@ -532,6 +542,15 @@
         if (p.imageWidth !== undefined && p.imageHeight !== undefined) {
           pageData.imageWidth = p.imageWidth;
           pageData.imageHeight = p.imageHeight;
+        }
+        if (p.candidateSummary && typeof p.candidateSummary === "object") {
+          pageData.candidateSummary = {
+            total: p.candidateSummary.total || 0,
+            pending: p.candidateSummary.pending || 0,
+            accepted: p.candidateSummary.accepted || 0,
+            ignored: p.candidateSummary.ignored || 0,
+            updatedAt: p.candidateSummary.updatedAt || p.updatedAt,
+          };
         }
         return pageData;
       });

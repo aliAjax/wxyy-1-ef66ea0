@@ -407,8 +407,12 @@
         const displayName = page.name || page.fileName || `第 ${index + 1} 页`;
 
         let candSummary = null;
-        if (page.id === currentPageId && liveCandStats && liveCandStats.total > 0) {
-          candSummary = liveCandStats;
+        if (page.id === currentPageId && liveCandStats) {
+          if (liveCandStats.total > 0) {
+            candSummary = liveCandStats;
+          } else if (page.candidateSummary && page.candidateSummary.total > 0) {
+            candSummary = page.candidateSummary;
+          }
         } else if (page.candidateSummary && page.candidateSummary.total > 0) {
           candSummary = page.candidateSummary;
         }

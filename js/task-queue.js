@@ -38,7 +38,7 @@
 
   function normalizeTask(raw) {
     if (!raw || typeof raw !== "object" || !raw.id) return null;
-    return {
+    var task = {
       id: raw.id,
       pageName: raw.pageName || "",
       priority: PRIORITY_VALUES.includes(raw.priority) ? raw.priority : "normal",
@@ -52,6 +52,16 @@
       createdAt: raw.createdAt || new Date().toISOString(),
       updatedAt: raw.updatedAt || new Date().toISOString(),
     };
+    if (raw.candidateSummary && typeof raw.candidateSummary === "object") {
+      task.candidateSummary = {
+        total: raw.candidateSummary.total || 0,
+        pending: raw.candidateSummary.pending || 0,
+        accepted: raw.candidateSummary.accepted || 0,
+        ignored: raw.candidateSummary.ignored || 0,
+        updatedAt: raw.candidateSummary.updatedAt || new Date().toISOString(),
+      };
+    }
+    return task;
   }
 
   function normalizeTaskState(raw) {
@@ -127,7 +137,7 @@
 
     createTask: function (opts) {
       opts = opts || {};
-      var task = normalizeTask({
+      var taskData = {
         id: crypto.randomUUID(),
         pageName: opts.pageName || "",
         priority: opts.priority || "normal",
@@ -140,7 +150,11 @@
         completedAt: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      };
+      if (opts.candidateSummary && typeof opts.candidateSummary === "object") {
+        taskData.candidateSummary = opts.candidateSummary;
+      }
+      var task = normalizeTask(taskData);
       if (!task) return null;
       this._state.tasks.push(task);
       if (!this._state.activeTaskId) {
@@ -157,22 +171,34 @@
       if (volumeState && volumeState.damageTypes) {
         damageTypes = JSON.parse(JSON.stringify(volumeState.damageTypes));
       }
-      return this.createTask({
+      var taskOpts = {
         pageName: page.name || page.fileName || "",
         pageId: page.id,
         image: page.image || "",
         damageTypes: damageTypes,
         markers: page.markers ? JSON.parse(JSON.stringify(page.markers)) : [],
-      });
+      };
+      if (page.candidateSummary && typeof page.candidateSummary === "object") {
+        taskOpts.candidateSummary = JSON.parse(JSON.stringify(page.candidateSummary));
+      }
+      return this.createTask(taskOpts);
     },
 
     updateTask: function (taskId, updates) {
       var task = this._state.tasks.find(function (t) { return t.id === taskId; });
       if (!task) return null;
-      var allowed = ["pageName", "priority", "status", "reviewNotes", "image", "markers", "damageTypes"];
+      var allowed = ["pageName", "priority", "status", "reviewNotes", "image", "markers", "damageTypes", "candidateSummary"];
       allowed.forEach(function (key) {
         if (updates[key] !== undefined) {
-          task[key] = updates[key];
+          if (key === "candidateSummary") {
+            if (updates[key] && typeof updates[key] === "object") {
+              task[key] = JSON.parse(JSON.stringify(updates[key]));
+            } else if (!updates[key]) {
+              delete task[key];
+            }
+          } else {
+            task[key] = updates[key];
+          }
         }
       });
       if (updates.status === "completed" && task.status === "completed" && !task.completedAt) {
