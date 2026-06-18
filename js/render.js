@@ -79,6 +79,15 @@
     confidenceThreshold: null,
     confidenceThresholdValue: null,
     acceptByConfidenceBtn: null,
+    batchSelectionBar: null,
+    selectAllMarkers: null,
+    selectByType: null,
+    batchSelectedCount: null,
+    clearSelectionBtn: null,
+    batchTypeSelect: null,
+    batchNoteInput: null,
+    batchAppendNoteBtn: null,
+    batchDeleteBtn: null,
   };
 
   let viewerMode = false;
@@ -91,6 +100,7 @@
     keyword: "",
   };
   let selectedMarkerId = null;
+  let selectedMarkerIds = new Set();
 
   function initDoms() {
     Doms.volumeId = document.getElementById("volumeId");
@@ -169,6 +179,15 @@
     Doms.confidenceThreshold = document.getElementById("confidenceThreshold");
     Doms.confidenceThresholdValue = document.getElementById("confidenceThresholdValue");
     Doms.acceptByConfidenceBtn = document.getElementById("acceptByConfidenceBtn");
+    Doms.batchSelectionBar = document.getElementById("batchSelectionBar");
+    Doms.selectAllMarkers = document.getElementById("selectAllMarkers");
+    Doms.selectByType = document.getElementById("selectByType");
+    Doms.batchSelectedCount = document.getElementById("batchSelectedCount");
+    Doms.clearSelectionBtn = document.getElementById("clearSelectionBtn");
+    Doms.batchTypeSelect = document.getElementById("batchTypeSelect");
+    Doms.batchNoteInput = document.getElementById("batchNoteInput");
+    Doms.batchAppendNoteBtn = document.getElementById("batchAppendNoteBtn");
+    Doms.batchDeleteBtn = document.getElementById("batchDeleteBtn");
   }
 
   function escapeHtml(str) {
@@ -262,6 +281,112 @@
     selectedMarkerId = markerId;
     renderMarkers();
     renderMarkerList();
+  }
+
+  function toggleMarkerSelection(markerId) {
+    if (selectedMarkerIds.has(markerId)) {
+      selectedMarkerIds.delete(markerId);
+    } else {
+      selectedMarkerIds.add(markerId);
+    }
+    renderMarkers();
+    renderMarkerList();
+    updateBatchSelectionUI();
+  }
+
+  function selectAllFilteredMarkers() {
+    const filtered = getFilteredMarkers();
+    filtered.forEach((m) => selectedMarkerIds.add(m.id));
+    renderMarkers();
+    renderMarkerList();
+    updateBatchSelectionUI();
+  }
+
+  function selectMarkersByType(typeId) {
+    const page = State.currentPage;
+    if (!page || !typeId) return;
+    const filtered = getFilteredMarkers();
+    filtered.forEach((m) => {
+      if (m.typeId === typeId) {
+        selectedMarkerIds.add(m.id);
+      }
+    });
+    renderMarkers();
+    renderMarkerList();
+    updateBatchSelectionUI();
+  }
+
+  function clearMarkerSelection() {
+    selectedMarkerIds.clear();
+    renderMarkers();
+    renderMarkerList();
+    updateBatchSelectionUI();
+  }
+
+  function getSelectedMarkerIds() {
+    return Array.from(selectedMarkerIds);
+  }
+
+  function updateBatchSelectionUI() {
+    if (!Doms.batchSelectionBar) return;
+    const page = State.currentPage;
+    const hasMarkers = page && page.markers.length > 0;
+    const count = selectedMarkerIds.size;
+
+    if (hasMarkers) {
+      Doms.batchSelectionBar.style.display = "block";
+    } else {
+      Doms.batchSelectionBar.style.display = "none";
+    }
+
+    if (Doms.batchSelectedCount) {
+      Doms.batchSelectedCount.textContent = `已选 ${count} 条`;
+    }
+
+    if (Doms.selectAllMarkers) {
+      const filtered = getFilteredMarkers();
+      const allSelected = filtered.length > 0 && filtered.every((m) => selectedMarkerIds.has(m.id));
+      Doms.selectAllMarkers.checked = allSelected;
+      Doms.selectAllMarkers.indeterminate = count > 0 && !allSelected;
+    }
+
+    const hasSelection = count > 0;
+    if (Doms.batchTypeSelect) Doms.batchTypeSelect.disabled = !hasSelection;
+    if (Doms.batchNoteInput) Doms.batchNoteInput.disabled = !hasSelection;
+    if (Doms.batchAppendNoteBtn) Doms.batchAppendNoteBtn.disabled = !hasSelection;
+    if (Doms.batchDeleteBtn) Doms.batchDeleteBtn.disabled = !hasSelection;
+  }
+
+  function renderBatchTypeOptions() {
+    const types = State.damageTypes;
+
+    if (Doms.selectByType) {
+      const prevValue = Doms.selectByType.value;
+      Doms.selectByType.innerHTML =
+        '<option value="">按类型选择…</option>' +
+        types
+          .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`)
+          .join("");
+      if (prevValue && types.some((t) => t.id === prevValue)) {
+        Doms.selectByType.value = prevValue;
+      } else {
+        Doms.selectByType.value = "";
+      }
+    }
+
+    if (Doms.batchTypeSelect) {
+      const prevValue = Doms.batchTypeSelect.value;
+      Doms.batchTypeSelect.innerHTML =
+        '<option value="">修改类型为…</option>' +
+        types
+          .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`)
+          .join("");
+      if (prevValue && types.some((t) => t.id === prevValue)) {
+        Doms.batchTypeSelect.value = prevValue;
+      } else {
+        Doms.batchTypeSelect.value = "";
+      }
+    }
   }
 
   function initImageViewer() {
@@ -548,10 +673,11 @@
 
     const migrCls = marker.migrated ? " migrated" : "";
     const selectedCls = marker.id === selectedMarkerId ? " selected" : "";
+    const batchSelectedCls = selectedMarkerIds.has(marker.id) ? " batch-selected" : "";
 
     if (marker.mode === "region") {
       return `
-        <span class="region-marker${migrCls}${selectedCls}${reviewCls}"
+        <span class="region-marker${migrCls}${selectedCls}${batchSelectedCls}${reviewCls}"
               data-type="${escapeHtml(typeInfo.name)}"
               data-type-id="${marker.typeId}"
               data-marker="${marker.id}"
@@ -563,7 +689,7 @@
       `;
     }
     return `
-      <span class="marker${migrCls}${selectedCls}${reviewCls}"
+      <span class="marker${migrCls}${selectedCls}${batchSelectedCls}${reviewCls}"
             data-type="${escapeHtml(typeInfo.name)}"
             data-type-id="${marker.typeId}"
             data-marker="${marker.id}"
@@ -907,6 +1033,7 @@
     if (!page || page.markers.length === 0) {
       Doms.markerList.innerHTML =
         '<div class="marker-empty">本页暂无损伤记录。</div>';
+      updateBatchSelectionUI();
       return;
     }
 
@@ -921,6 +1048,7 @@
           '<div class="empty-desc">共 ' + totalCount + ' 条记录，当前筛选条件下无匹配结果</div>' +
           '<button type="button" class="clear-filter-inline" id="clearFilterInlineBtn">清除筛选条件</button>' +
         '</div>';
+      updateBatchSelectionUI();
       return;
     }
 
@@ -947,7 +1075,9 @@
           ? '<span class="record-mode mode-migrated">迁移</span>'
           : '';
         const isSelected = marker.id === selectedMarkerId;
+        const isBatchSelected = selectedMarkerIds.has(marker.id);
         const selectedCls = isSelected ? ' selected' : '';
+        const batchSelectedCls = isBatchSelected ? ' batch-selected' : '';
 
         let dims = "";
         if (isRegion) {
@@ -974,15 +1104,26 @@
           }
         }
 
+        let candTag = "";
+        if (marker._candidateId) {
+          candTag = '<span class="record-mode mode-auto">自动</span>';
+        }
+
         return `
-          <article class="record${selectedCls}" data-marker="${marker.id}">
-            <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}${migrTag}${reviewTag}</strong>
-            <p>${note}${dims}${coords}${reviewComment}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
-            <button type="button" data-delete="${marker.id}">删除</button>
+          <article class="record${selectedCls}${batchSelectedCls}" data-marker="${marker.id}">
+            <label class="record-checkbox" title="选择此标记">
+              <input type="checkbox" class="marker-select-checkbox" data-marker-id="${marker.id}" ${isBatchSelected ? 'checked' : ''} />
+            </label>
+            <div class="record-content">
+              <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}${migrTag}${candTag}${reviewTag}</strong>
+              <p>${note}${dims}${coords}${reviewComment}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
+            </div>
+            <button type="button" data-delete="${marker.id}" class="record-delete-btn">删除</button>
           </article>
         `;
       })
       .join("");
+    updateBatchSelectionUI();
   }
 
   function renderPageNav() {
@@ -1207,8 +1348,19 @@
     if (!page) {
       selectedMarkerId = null;
     }
+    if (page) {
+      const validIds = new Set(page.markers.map((m) => m.id));
+      for (const id of Array.from(selectedMarkerIds)) {
+        if (!validIds.has(id)) {
+          selectedMarkerIds.delete(id);
+        }
+      }
+    } else {
+      selectedMarkerIds.clear();
+    }
     renderTypeInput();
     renderFilterTypeOptions();
+    renderBatchTypeOptions();
     renderVolumeMeta();
     renderPagesList();
     renderCanvas();
@@ -1297,6 +1449,13 @@
     });
 
     Doms.markerList.addEventListener("click", (event) => {
+      const checkbox = event.target.closest(".marker-select-checkbox");
+      if (checkbox) {
+        event.stopPropagation();
+        const id = checkbox.dataset.markerId;
+        toggleMarkerSelection(id);
+        return;
+      }
       const deleteBtn = event.target.closest("[data-delete]");
       if (deleteBtn) {
         event.stopPropagation();
@@ -1508,6 +1667,13 @@
     getActiveStageElements,
     exportRealCoords,
     renderMarkers,
+    toggleMarkerSelection,
+    selectAllFilteredMarkers,
+    selectMarkersByType,
+    clearMarkerSelection,
+    getSelectedMarkerIds,
+    updateBatchSelectionUI,
+    renderBatchTypeOptions,
     Doms,
   };
 

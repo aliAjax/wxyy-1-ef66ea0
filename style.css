@@ -943,6 +943,123 @@ body.dragging-region * {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+.record {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.record.batch-selected {
+  border-color: var(--accent);
+  background: rgba(157, 63, 47, 0.06);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.record-checkbox {
+  display: flex;
+  align-items: center;
+  padding-top: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.record-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.record-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-delete-btn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.record-mode.mode-auto {
+  background: rgba(100, 125, 82, 0.15);
+  color: var(--mold);
+}
+
+.marker.batch-selected,
+.region-marker.batch-selected {
+  box-shadow: 0 0 0 3px var(--accent), 0 0 12px rgba(157, 63, 47, 0.4);
+  z-index: 10;
+}
+
+.batch-selection-bar {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf8;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.batch-select-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.batch-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.batch-select-all input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.batch-selected-count {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.batch-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.batch-actions-row .filter-select,
+.batch-actions-row .filter-input {
+  width: auto;
+  min-width: 140px;
+  flex: 1;
+}
+
+.small-btn.danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.small-btn.danger:hover {
+  background: #8b2626;
+  border-color: #8b2626;
+}
+
 .marker-filter-bar {
   display: grid;
   grid-template-columns: 1fr 1fr;

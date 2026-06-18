@@ -139,6 +139,9 @@
         reviewedAt: m.review.reviewedAt || null,
       };
     }
+    if (m._candidateId) base._candidateId = m._candidateId;
+    if (m._candidateType) base._candidateType = m._candidateType;
+    if (m._candidateConfidence !== undefined) base._candidateConfidence = Number(m._candidateConfidence);
     return base;
   }
 

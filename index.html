@@ -228,6 +228,27 @@
           <input type="text" id="filterKeyword" class="filter-input" placeholder="搜索备注关键词…" title="按备注关键词搜索" />
           <button type="button" id="clearFilterBtn" class="clear-filter-btn" title="清除筛选">✕</button>
         </div>
+        <div class="batch-selection-bar" id="batchSelectionBar" style="display:none;">
+          <div class="batch-select-row">
+            <label class="batch-select-all">
+              <input type="checkbox" id="selectAllMarkers" />
+              <span>全选</span>
+            </label>
+            <select id="selectByType" class="filter-select" title="按类型批量选择">
+              <option value="">按类型选择…</option>
+            </select>
+            <span class="batch-selected-count" id="batchSelectedCount">已选 0 条</span>
+            <button type="button" id="clearSelectionBtn" class="small-btn" title="取消选择">取消选择</button>
+          </div>
+          <div class="batch-actions-row">
+            <select id="batchTypeSelect" class="filter-select" title="批量修改类型">
+              <option value="">修改类型为…</option>
+            </select>
+            <input type="text" id="batchNoteInput" class="filter-input" placeholder="追加备注…" title="批量追加备注" />
+            <button type="button" id="batchAppendNoteBtn" class="small-btn" title="批量追加备注">追加备注</button>
+            <button type="button" id="batchDeleteBtn" class="small-btn danger" title="批量删除">删除所选</button>
+          </div>
+        </div>
         <div id="markerList" class="marker-list"></div>
       </aside>
     </section>

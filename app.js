@@ -111,6 +111,16 @@
   const cancelExportBtn = document.getElementById("cancelExportBtn");
   const confirmExportBtn = document.getElementById("confirmExportBtn");
 
+  const batchSelectionBar = document.getElementById("batchSelectionBar");
+  const selectAllMarkers = document.getElementById("selectAllMarkers");
+  const selectByType = document.getElementById("selectByType");
+  const batchSelectedCount = document.getElementById("batchSelectedCount");
+  const clearSelectionBtn = document.getElementById("clearSelectionBtn");
+  const batchTypeSelect = document.getElementById("batchTypeSelect");
+  const batchNoteInput = document.getElementById("batchNoteInput");
+  const batchAppendNoteBtn = document.getElementById("batchAppendNoteBtn");
+  const batchDeleteBtn = document.getElementById("batchDeleteBtn");
+
   let currentMode = "point";
   let dragState = null;
   let pendingImportData = null;
@@ -3135,6 +3145,82 @@
     }
     if (tqExportIncludeImages) {
       tqExportIncludeImages.addEventListener("change", updateTaskExportSummary);
+    }
+
+    if (selectAllMarkers) {
+      selectAllMarkers.addEventListener("change", function () {
+        if (selectAllMarkers.checked) {
+          Render.selectAllFilteredMarkers();
+        } else {
+          Render.clearMarkerSelection();
+        }
+      });
+    }
+
+    if (selectByType) {
+      selectByType.addEventListener("change", function () {
+        var typeId = selectByType.value;
+        if (typeId) {
+          Render.selectMarkersByType(typeId);
+        }
+        selectByType.value = "";
+      });
+    }
+
+    if (clearSelectionBtn) {
+      clearSelectionBtn.addEventListener("click", function () {
+        Render.clearMarkerSelection();
+      });
+    }
+
+    if (batchTypeSelect) {
+      batchTypeSelect.addEventListener("change", function () {
+        var typeId = batchTypeSelect.value;
+        if (!typeId) return;
+        var selectedIds = Render.getSelectedMarkerIds();
+        if (selectedIds.length === 0) {
+          showToast("请先选择要修改的标记", "warning");
+          batchTypeSelect.value = "";
+          return;
+        }
+        State.batchUpdateMarkers(selectedIds, { typeId: typeId });
+        showToast("已修改 " + selectedIds.length + " 条标记的类型", "success");
+        batchTypeSelect.value = "";
+      });
+    }
+
+    if (batchAppendNoteBtn) {
+      batchAppendNoteBtn.addEventListener("click", function () {
+        var noteText = (batchNoteInput.value || "").trim();
+        if (!noteText) {
+          showToast("请输入要追加的备注内容", "warning");
+          return;
+        }
+        var selectedIds = Render.getSelectedMarkerIds();
+        if (selectedIds.length === 0) {
+          showToast("请先选择要追加备注的标记", "warning");
+          return;
+        }
+        State.appendNoteToMarkers(selectedIds, noteText);
+        showToast("已为 " + selectedIds.length + " 条标记追加备注", "success");
+        batchNoteInput.value = "";
+      });
+    }
+
+    if (batchDeleteBtn) {
+      batchDeleteBtn.addEventListener("click", function () {
+        var selectedIds = Render.getSelectedMarkerIds();
+        if (selectedIds.length === 0) {
+          showToast("请先选择要删除的标记", "warning");
+          return;
+        }
+        if (!confirm("确定要删除选中的 " + selectedIds.length + " 条标记吗？此操作不可撤销。")) {
+          return;
+        }
+        State.batchRemoveMarkers(selectedIds);
+        Render.clearMarkerSelection();
+        showToast("已删除 " + selectedIds.length + " 条标记", "success");
+      });
     }
 
     State.subscribe(function () {

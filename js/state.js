@@ -339,6 +339,105 @@
       return true;
     },
 
+    updateMarker(markerId, updates) {
+      const page = this.currentPage;
+      if (!page) return null;
+      const marker = page.markers.find((m) => m.id === markerId);
+      if (!marker) return null;
+
+      if (updates.typeId !== undefined) {
+        if (this.isValidTypeId(updates.typeId)) {
+          marker.typeId = updates.typeId;
+          const typeInfo = this.findTypeById(updates.typeId);
+          if (typeInfo) marker.type = typeInfo.name;
+        }
+      } else if (updates.type !== undefined) {
+        const byName = this.findTypeByName(updates.type);
+        if (byName) {
+          marker.typeId = byName.id;
+          marker.type = byName.name;
+        }
+      }
+
+      if (updates.note !== undefined) {
+        marker.note = String(updates.note).trim();
+      }
+      if (updates.appendNote !== undefined && updates.appendNote.trim()) {
+        const appendText = String(updates.appendNote).trim();
+        marker.note = marker.note ? marker.note + "；" + appendText : appendText;
+      }
+
+      page.updatedAt = new Date().toISOString();
+      this._persist();
+      this._notify();
+      return marker;
+    },
+
+    batchUpdateMarkers(markerIds, updates) {
+      const page = this.currentPage;
+      if (!page || !Array.isArray(markerIds) || markerIds.length === 0) return 0;
+      const idSet = new Set(markerIds);
+      let count = 0;
+
+      let resolvedTypeId = null;
+      let resolvedTypeName = null;
+      if (updates.typeId !== undefined && this.isValidTypeId(updates.typeId)) {
+        resolvedTypeId = updates.typeId;
+        const typeInfo = this.findTypeById(updates.typeId);
+        resolvedTypeName = typeInfo ? typeInfo.name : null;
+      } else if (updates.type !== undefined) {
+        const byName = this.findTypeByName(updates.type);
+        if (byName) {
+          resolvedTypeId = byName.id;
+          resolvedTypeName = byName.name;
+        }
+      }
+
+      page.markers.forEach((m) => {
+        if (!idSet.has(m.id)) return;
+        if (resolvedTypeId) {
+          m.typeId = resolvedTypeId;
+          if (resolvedTypeName) m.type = resolvedTypeName;
+        }
+        if (updates.note !== undefined) {
+          m.note = String(updates.note).trim();
+        }
+        if (updates.appendNote !== undefined && updates.appendNote.trim()) {
+          const appendText = String(updates.appendNote).trim();
+          m.note = m.note ? m.note + "；" + appendText : appendText;
+        }
+        count++;
+      });
+
+      if (count > 0) {
+        page.updatedAt = new Date().toISOString();
+        this._persist();
+        this._notify();
+      }
+      return count;
+    },
+
+    batchRemoveMarkers(markerIds) {
+      const page = this.currentPage;
+      if (!page || !Array.isArray(markerIds) || markerIds.length === 0) return 0;
+      const idSet = new Set(markerIds);
+      const before = page.markers.length;
+      page.markers = page.markers.filter((m) => !idSet.has(m.id));
+      const removed = before - page.markers.length;
+      if (removed > 0) {
+        page.updatedAt = new Date().toISOString();
+        this._persist();
+        this._notify();
+      }
+      return removed;
+    },
+
+    appendNoteToMarkers(markerIds, noteText) {
+      const text = String(noteText || "").trim();
+      if (!text) return 0;
+      return this.batchUpdateMarkers(markerIds, { appendNote: text });
+    },
+
     clearCurrentPage() {
       const page = this.currentPage;
       if (!page) return false;
