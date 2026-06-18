@@ -28,6 +28,7 @@
 
   const VolumeState = {
     _state: null,
+    _colorDebounceTimer: null,
 
     init() {
       this._state = global.VolumeStorage.load();
@@ -722,6 +723,25 @@
       if (!color) return false;
       const existing = this._state.damageTypes.find((t) => t.id === typeId);
       if (!existing) return false;
+
+      var self = this;
+      if (!this._colorDebounceTimer && global.HistoryManager && !global.HistoryManager._suppressRecording) {
+        var undoStack = global.HistoryManager._undoStack;
+        var lastEntry = undoStack && undoStack.length > 0 ? undoStack[undoStack.length - 1] : null;
+        var now = Date.now();
+        var recentEnough = lastEntry && lastEntry.action === "config-damage-types"
+          && lastEntry.timestamp && (now - new Date(lastEntry.timestamp).getTime() < 2000);
+        if (!recentEnough) {
+          global.HistoryManager.recordAction("config-damage-types");
+        }
+      }
+      if (this._colorDebounceTimer) {
+        clearTimeout(this._colorDebounceTimer);
+      }
+      this._colorDebounceTimer = setTimeout(function () {
+        self._colorDebounceTimer = null;
+      }, 1000);
+
       existing.color = color;
       this._persist();
       this._notify();

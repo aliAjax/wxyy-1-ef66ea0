@@ -1516,6 +1516,9 @@
         if (
           confirm("确认从卷册中移除此页？该页的全部标记将一并删除，此操作不可撤销。")
         ) {
+          if (window.HistoryManager) {
+            window.HistoryManager.recordAction("delete-page");
+          }
           State.removePage(pid);
         }
         return;
@@ -1547,7 +1550,12 @@
       if (deleteBtn) {
         event.stopPropagation();
         const id = deleteBtn.dataset.delete;
-        if (confirm("删除此标记？")) State.removeMarker(id);
+        if (confirm("删除此标记？")) {
+          if (window.HistoryManager) {
+            window.HistoryManager.recordAction("delete-marker");
+          }
+          State.removeMarker(id);
+        }
         return;
       }
       const recordEl = event.target.closest("[data-marker]");
@@ -1567,10 +1575,16 @@
 
     Doms.typeConfigList.addEventListener("input", (event) => {
       const colorFor = event.target.dataset.colorFor;
-      const nameFor = event.target.dataset.nameFor;
       if (colorFor) {
         State.setDamageTypeColor(colorFor, event.target.value);
-      } else if (nameFor) {
+      }
+    });
+    Doms.typeConfigList.addEventListener("change", (event) => {
+      const nameFor = event.target.dataset.nameFor;
+      if (nameFor) {
+        if (window.HistoryManager) {
+          window.HistoryManager.recordAction("config-damage-types");
+        }
         const ok = State.renameDamageType(nameFor, event.target.value);
         if (!ok) {
           const type = State.findTypeById(nameFor);
@@ -1603,6 +1617,9 @@
         Doms.newTypeName.focus();
         return;
       }
+      if (window.HistoryManager) {
+        window.HistoryManager.recordAction("config-damage-types");
+      }
       const result = State.addDamageType({ name, color });
       if (!result) {
         alert("新增失败：类型名称可能已存在，请检查后重试。");
@@ -1619,6 +1636,9 @@
     Doms.confirmDeleteTypeBtn.addEventListener("click", () => {
       if (!pendingDeleteTypeId) return;
       const targetId = Doms.migrateTypeTarget.value;
+      if (window.HistoryManager) {
+        window.HistoryManager.recordAction("config-damage-types");
+      }
       const ok = State.deleteDamageType(pendingDeleteTypeId, targetId);
       if (ok) {
         closeDeleteConfirm();
@@ -1717,7 +1737,12 @@
       const id = markerEl.dataset.marker;
       if (event.detail === 2) {
         event.preventDefault();
-        if (confirm("删除此标记？")) State.removeMarker(id);
+        if (confirm("删除此标记？")) {
+          if (window.HistoryManager) {
+            window.HistoryManager.recordAction("delete-marker");
+          }
+          State.removeMarker(id);
+        }
       } else {
         event.stopPropagation();
         if (selectedMarkerId === id) {

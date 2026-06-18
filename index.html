@@ -24,6 +24,8 @@
         </label>
       </div>
       <div class="actions">
+        <button id="undoBtn" type="button" title="撤销上一步操作 (Ctrl+Z)" disabled>↶ 撤销</button>
+        <button id="redoBtn" type="button" title="重做已撤销的操作 (Ctrl+Y)" disabled>↷ 重做</button>
         <button id="viewerModeBtn" type="button" title="切换超大扫描页查看器模式" class="primary">🔍 超大查看器</button>
         <button id="autoDetectBtn" type="button" title="自动识别虫蛀候选">🔮 智能识别</button>
         <button id="configBtn" type="button" title="配置损伤类型">⚙ 类型配置</button>
@@ -679,6 +681,7 @@
 
   <script src="./js/storage.js"></script>
   <script src="./js/task-queue.js"></script>
+  <script src="./js/history-manager.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/project-package.js"></script>
   <script src="./js/candidate-detector.js"></script>

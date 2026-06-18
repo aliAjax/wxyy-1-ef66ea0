@@ -120,12 +120,15 @@
   const batchNoteInput = document.getElementById("batchNoteInput");
   const batchAppendNoteBtn = document.getElementById("batchAppendNoteBtn");
   const batchDeleteBtn = document.getElementById("batchDeleteBtn");
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
 
   let currentMode = "point";
   let dragState = null;
   let pendingImportData = null;
   let mergeReviewOnlyMode = false;
   let candidatesVisible = true;
+  window._candidatesVisible = candidatesVisible;
   let lastPageId = null;
 
   var toastContainer = document.getElementById("toastContainer");
@@ -191,6 +194,10 @@
       f.type.startsWith("image/")
     );
     if (files.length === 0) return;
+
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("import-pages");
+    }
 
     const sortBy = (a, b) => {
       const na = (a.name || "").toLowerCase();
@@ -309,6 +316,9 @@
       markerData.realY = clickCoords.realY;
     }
 
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("add-marker");
+    }
     const marker = State.addMarker(markerData);
     if (marker) {
       noteInput.value = "";
@@ -439,6 +449,9 @@
 
     const selectedTypeId = Render.getSelectedTypeId();
 
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("add-region");
+    }
     const markerData = {
       typeId: selectedTypeId,
       note: noteInput.value,
@@ -1125,6 +1138,9 @@
       return;
     }
 
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("import-workpackage");
+    }
     var result = State.restoreFromPackage(pendingImportData);
 
     if (result.success) {
@@ -1213,6 +1229,9 @@
       return;
     }
     if (!confirm("清空当前扫描页和全部标记？此操作不可撤销。")) return;
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("clear-page-markers");
+    }
     State.clearCurrentPage();
   }
 
@@ -1261,6 +1280,26 @@
       }
     }
     if (event.target.matches("input, textarea, select")) return;
+    if ((event.ctrlKey || event.metaKey) && event.key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      if (window.HistoryManager && window.HistoryManager.canUndo()) {
+        var undoEntry = window.HistoryManager.undo();
+        if (undoEntry) {
+          showToast("已撤销：" + undoEntry.label, "info");
+        }
+      }
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && (event.key === "y" || (event.key === "z" && event.shiftKey))) {
+      event.preventDefault();
+      if (window.HistoryManager && window.HistoryManager.canRedo()) {
+        var redoEntry = window.HistoryManager.redo();
+        if (redoEntry) {
+          showToast("已重做：" + redoEntry.label, "info");
+        }
+      }
+      return;
+    }
     if (event.key === "ArrowLeft" && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
       State.switchPrev();
@@ -1270,6 +1309,9 @@
     } else if ((event.key === "Delete" || event.key === "Backspace") && State.currentPage && State.currentPage.markers.length > 0) {
       if (confirm("清空当前页全部标记？")) {
         event.preventDefault();
+        if (window.HistoryManager) {
+          window.HistoryManager.recordAction("clear-page-markers");
+        }
         State.clearCurrentMarkers();
       }
     }
@@ -1361,6 +1403,9 @@
 
   function acceptAllPendingCandidates() {
     if (!CandidateManager) return;
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("accept-candidates");
+    }
     const count = CandidateManager.acceptAllPending();
     if (count > 0) {
       syncCandidateSummaryToState();
@@ -1391,6 +1436,9 @@
       : 70;
     const minConfidence = thresholdPercent / 100;
 
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("accept-candidates");
+    }
     const count = CandidateManager.acceptByConfidence(minConfidence);
     if (count > 0) {
       syncCandidateSummaryToState();
@@ -1418,6 +1466,9 @@
 
     const selectedTypeId = Render.getSelectedTypeId();
 
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("accept-candidates");
+    }
     let addedCount = 0;
     for (const markerData of acceptedMarkers) {
       const finalMarker = {
@@ -1443,6 +1494,9 @@
   function handleCandidateAction(candidateId, action) {
     if (!CandidateManager) return;
 
+    if (action === "accept" && window.HistoryManager) {
+      window.HistoryManager.recordAction("accept-candidates");
+    }
     switch (action) {
       case "accept":
         CandidateManager.acceptCandidate(candidateId);
@@ -1540,6 +1594,7 @@
 
   function toggleCandidates() {
     candidatesVisible = !candidatesVisible;
+    window._candidatesVisible = candidatesVisible;
     const { candidateLayer } = Render.getActiveStageElements();
     const candidateLayerSimple = document.getElementById("candidateLayerSimple");
     const candidateLayerViewer = document.getElementById("candidateLayer");
@@ -1660,6 +1715,9 @@
 
   function handleCalibGenerate() {
     if (!CalibrationUI) return;
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("apply-migration");
+    }
     var result = CalibrationUI.computeAndGenerateCandidates();
     if (result.success) {
       calibResult.textContent = "变换计算成功！生成了 " + result.count + " 个迁移候选标记，请逐条确认。";
@@ -1977,6 +2035,9 @@
     var srcId = (calData && calData.sourcePageId) || null;
     var tgtId = (calData && calData.targetPageId) || null;
 
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("apply-migration");
+    }
     var result = CalibrationUI.applyCalibrationPlan(_appPendingPlanId, {
       sourcePageId: srcId,
       targetPageId: tgtId,
@@ -2178,6 +2239,9 @@
 
   function handleMigrAcceptAll() {
     if (!CalibrationUI) return;
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("apply-migration");
+    }
     var count = CalibrationUI.acceptAllPending();
     if (count > 0) {
       showToast("已接受 " + count + " 个候选", "success");
@@ -2202,6 +2266,9 @@
 
   function handleMigrApply() {
     if (!CalibrationUI) return;
+    if (window.HistoryManager) {
+      window.HistoryManager.recordAction("apply-migration");
+    }
     var result = CalibrationUI.applyAccepted();
     if (result.added > 0) {
       showToast("已应用 " + result.added + " 条迁移标记到目标页面", "success");
@@ -3248,6 +3315,9 @@
         var affectedPageIds = getPageIdsFromMarkerIds(selectedIds);
         var typeInfo = State.findTypeById ? State.findTypeById(typeId) : null;
         var typeName = typeInfo ? typeInfo.name : ("类型#" + typeId.slice(0, 6));
+        if (window.HistoryManager) {
+          window.HistoryManager.recordAction("batch-update-markers");
+        }
         State.batchUpdateMarkers(selectedIds, { typeId: typeId });
         syncPagesToTaskQueue(affectedPageIds);
         if (affectedPageIds.length > 1) {
@@ -3272,6 +3342,9 @@
           return;
         }
         var affectedPageIds = getPageIdsFromMarkerIds(selectedIds);
+        if (window.HistoryManager) {
+          window.HistoryManager.recordAction("batch-update-markers");
+        }
         State.appendNoteToMarkers(selectedIds, noteText);
         syncPagesToTaskQueue(affectedPageIds);
         if (affectedPageIds.length > 1) {
@@ -3298,6 +3371,9 @@
         if (!confirm(promptMsg)) {
           return;
         }
+        if (window.HistoryManager) {
+          window.HistoryManager.recordAction("batch-delete-markers");
+        }
         State.batchRemoveMarkers(selectedIds);
         syncPagesToTaskQueue(affectedPageIds);
         Render.clearMarkerSelection();
@@ -3305,6 +3381,27 @@
           showToast("已跨 " + affectedPageIds.length + " 页删除 " + selectedIds.length + " 条标记", "success");
         } else {
           showToast("已删除 " + selectedIds.length + " 条标记", "success");
+        }
+      });
+    }
+
+    if (undoBtn) {
+      undoBtn.addEventListener("click", function () {
+        if (window.HistoryManager && window.HistoryManager.canUndo()) {
+          var entry = window.HistoryManager.undo();
+          if (entry) {
+            showToast("已撤销：" + entry.label, "info");
+          }
+        }
+      });
+    }
+    if (redoBtn) {
+      redoBtn.addEventListener("click", function () {
+        if (window.HistoryManager && window.HistoryManager.canRedo()) {
+          var entry = window.HistoryManager.redo();
+          if (entry) {
+            showToast("已重做：" + entry.label, "info");
+          }
         }
       });
     }
@@ -3318,6 +3415,32 @@
 
   function bootstrap() {
     State.init();
+    if (window.HistoryManager) {
+      window.HistoryManager.init();
+      window.HistoryManager.subscribe(function (info) {
+        if (undoBtn) {
+          undoBtn.disabled = !info.canUndo;
+          if (info.canUndo && info.lastAction) {
+            undoBtn.title = "撤销 " + info.lastAction.label + " (Ctrl+Z)";
+          } else {
+            undoBtn.title = "撤销上一步操作 (Ctrl+Z)";
+          }
+        }
+        if (redoBtn) {
+          redoBtn.disabled = !info.canRedo;
+          var redoLabel = window.HistoryManager.getRedoLabel();
+          if (info.canRedo && redoLabel) {
+            redoBtn.title = "重做 " + redoLabel + " (Ctrl+Y)";
+          } else {
+            redoBtn.title = "重做已撤销的操作 (Ctrl+Y)";
+          }
+        }
+        if (info.degraded) {
+          if (undoBtn) undoBtn.title = undoBtn.title + "（降级模式：历史可能不完整）";
+          if (redoBtn) redoBtn.title = redoBtn.title + "（降级模式：历史可能不完整）";
+        }
+      });
+    }
     if (TaskQueue) {
       TaskQueue.init();
       TaskQueue.subscribe(function () {
