@@ -1,0 +1,198 @@
+{
+  "format": "archive-volume-damage",
+  "formatVersion": "1.1",
+  "exportedAt": "2026-06-14T10:00:00.000Z",
+  "volume": {
+    "id": "TEST-001",
+    "title": "测试古籍·卷一（标注员A）",
+    "createdAt": "2026-06-10T09:00:00.000Z",
+    "updatedAt": "2026-06-14T10:00:00.000Z"
+  },
+  "damageTypes": [
+    { "id": "type-1", "name": "虫蛀点", "color": "#9d3f2f" },
+    { "id": "type-2", "name": "破洞", "color": "#2f2b27" },
+    { "id": "type-3", "name": "霉斑", "color": "#647d52" },
+    { "id": "type-4", "name": "缺角", "color": "#b27830" }
+  ],
+  "pages": [
+    {
+      "id": "page-001",
+      "name": "第1页",
+      "fileName": "page_001.jpg",
+      "markers": [
+        {
+          "id": "marker-a-001",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "书口处散点分布",
+          "x": 45.23,
+          "y": 32.15,
+          "createdAt": "2026-06-14T10:00:00.000Z"
+        },
+        {
+          "id": "marker-a-002",
+          "typeId": "type-2",
+          "type": "破洞",
+          "mode": "region",
+          "note": "较大破洞，边缘不规则",
+          "x": 20.50,
+          "y": 55.80,
+          "width": 8.25,
+          "height": 12.30,
+          "createdAt": "2026-06-14T10:01:00.000Z"
+        },
+        {
+          "id": "marker-a-003",
+          "typeId": "type-3",
+          "type": "霉斑",
+          "mode": "region",
+          "note": "左上角水渍引起的霉斑",
+          "x": 5.10,
+          "y": 8.20,
+          "width": 15.00,
+          "height": 18.50,
+          "createdAt": "2026-06-14T10:02:00.000Z"
+        },
+        {
+          "id": "marker-a-004",
+          "typeId": "type-4",
+          "type": "缺角",
+          "mode": "region",
+          "note": "右下角缺角，疑似虫噬",
+          "x": 82.00,
+          "y": 85.00,
+          "width": 12.00,
+          "height": 10.00,
+          "createdAt": "2026-06-14T10:03:00.000Z"
+        },
+        {
+          "id": "marker-a-005",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "A独有标记",
+          "x": 15.00,
+          "y": 45.00,
+          "createdAt": "2026-06-14T10:04:00.000Z"
+        },
+        {
+          "id": "marker-a-006",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "类型应该是虫蛀点",
+          "x": 60.00,
+          "y": 60.00,
+          "createdAt": "2026-06-14T10:05:00.000Z"
+        },
+        {
+          "id": "marker-a-007",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "备注A版本",
+          "x": 70.00,
+          "y": 25.00,
+          "createdAt": "2026-06-14T10:06:00.000Z"
+        }
+      ],
+      "createdAt": "2026-06-10T09:30:00.000Z",
+      "updatedAt": "2026-06-14T10:06:00.000Z"
+    },
+    {
+      "id": "page-002",
+      "name": "第2页",
+      "fileName": "page_002.jpg",
+      "markers": [
+        {
+          "id": "marker-a-101",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "中部散点",
+          "x": 50.00,
+          "y": 50.00,
+          "createdAt": "2026-06-14T10:10:00.000Z"
+        },
+        {
+          "id": "marker-a-102",
+          "typeId": "type-2",
+          "type": "破洞",
+          "mode": "region",
+          "note": "页边破洞",
+          "x": 10.00,
+          "y": 30.00,
+          "width": 6.00,
+          "height": 8.00,
+          "createdAt": "2026-06-14T10:11:00.000Z"
+        },
+        {
+          "id": "marker-a-103",
+          "typeId": "type-3",
+          "type": "霉斑",
+          "mode": "region",
+          "note": "大面积霉斑",
+          "x": 40.00,
+          "y": 60.00,
+          "width": 20.00,
+          "height": 15.00,
+          "createdAt": "2026-06-14T10:12:00.000Z"
+        }
+      ],
+      "createdAt": "2026-06-10T09:30:00.000Z",
+      "updatedAt": "2026-06-14T10:12:00.000Z"
+    },
+    {
+      "id": "page-003",
+      "name": "第3页",
+      "fileName": "page_003.jpg",
+      "markers": [
+        {
+          "id": "marker-a-201",
+          "typeId": "type-4",
+          "type": "缺角",
+          "mode": "region",
+          "note": "左上角缺角",
+          "x": 0.00,
+          "y": 0.00,
+          "width": 10.00,
+          "height": 10.00,
+          "createdAt": "2026-06-14T10:20:00.000Z"
+        },
+        {
+          "id": "marker-a-202",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "",
+          "x": 30.00,
+          "y": 40.00,
+          "createdAt": "2026-06-14T10:21:00.000Z"
+        },
+        {
+          "id": "marker-a-203",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "",
+          "x": 35.00,
+          "y": 42.00,
+          "createdAt": "2026-06-14T10:22:00.000Z"
+        },
+        {
+          "id": "marker-a-204",
+          "typeId": "type-1",
+          "type": "虫蛀点",
+          "mode": "point",
+          "note": "",
+          "x": 32.00,
+          "y": 45.00,
+          "createdAt": "2026-06-14T10:23:00.000Z"
+        }
+      ],
+      "createdAt": "2026-06-10T09:30:00.000Z",
+      "updatedAt": "2026-06-14T10:23:00.000Z"
+    }
+  ]
+}

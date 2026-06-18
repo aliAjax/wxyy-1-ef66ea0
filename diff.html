@@ -72,30 +72,73 @@
       </aside>
 
       <section class="diff-canvas-panel">
-        <div class="diff-stats" id="diffStats" style="display:none;">
-          <div class="stat-card match">
-            <span class="stat-label">匹配</span>
-            <span class="stat-value" id="statMatch">0</span>
+        <div class="diff-page-nav" id="diffPageNav" style="display:none;">
+          <div class="page-nav-header">
+            <span class="page-nav-title">页面导航</span>
+            <span class="page-nav-summary" id="pageNavSummary">共 0 页</span>
           </div>
-          <div class="stat-card only-a">
-            <span class="stat-label">仅 A 有</span>
-            <span class="stat-value" id="statOnlyA">0</span>
+          <div class="page-nav-list" id="pageNavList"></div>
+        </div>
+
+        <div class="diff-stats-section" id="diffStatsSection" style="display:none;">
+          <div class="diff-stats-header">
+            <span class="stats-scope" id="statsScope">当前页统计</span>
+            <div class="stats-toggle">
+              <button type="button" class="stats-toggle-btn active" data-scope="page">当前页</button>
+              <button type="button" class="stats-toggle-btn" data-scope="volume">全卷汇总</button>
+            </div>
           </div>
-          <div class="stat-card only-b">
-            <span class="stat-label">仅 B 有</span>
-            <span class="stat-value" id="statOnlyB">0</span>
+          <div class="diff-stats diff-stats-page" id="diffStatsPage">
+            <div class="stat-card match">
+              <span class="stat-label">匹配</span>
+              <span class="stat-value" id="statMatchPage">0</span>
+            </div>
+            <div class="stat-card only-a">
+              <span class="stat-label">仅 A 有</span>
+              <span class="stat-value" id="statOnlyAPage">0</span>
+            </div>
+            <div class="stat-card only-b">
+              <span class="stat-label">仅 B 有</span>
+              <span class="stat-value" id="statOnlyBPage">0</span>
+            </div>
+            <div class="stat-card type-mismatch">
+              <span class="stat-label">类型不一致</span>
+              <span class="stat-value" id="statTypePage">0</span>
+            </div>
+            <div class="stat-card note-mismatch">
+              <span class="stat-label">备注不一致</span>
+              <span class="stat-value" id="statNotePage">0</span>
+            </div>
+            <div class="stat-card consistency">
+              <span class="stat-label">一致率</span>
+              <span class="stat-value" id="statConsistencyPage">0%</span>
+            </div>
           </div>
-          <div class="stat-card type-mismatch">
-            <span class="stat-label">类型不一致</span>
-            <span class="stat-value" id="statType">0</span>
-          </div>
-          <div class="stat-card note-mismatch">
-            <span class="stat-label">备注不一致</span>
-            <span class="stat-value" id="statNote">0</span>
-          </div>
-          <div class="stat-card consistency">
-            <span class="stat-label">一致率</span>
-            <span class="stat-value" id="statConsistency">0%</span>
+          <div class="diff-stats diff-stats-volume" id="diffStatsVolume" style="display:none;">
+            <div class="stat-card match">
+              <span class="stat-label">匹配</span>
+              <span class="stat-value" id="statMatchVolume">0</span>
+            </div>
+            <div class="stat-card only-a">
+              <span class="stat-label">仅 A 有</span>
+              <span class="stat-value" id="statOnlyAVolume">0</span>
+            </div>
+            <div class="stat-card only-b">
+              <span class="stat-label">仅 B 有</span>
+              <span class="stat-value" id="statOnlyBVolume">0</span>
+            </div>
+            <div class="stat-card type-mismatch">
+              <span class="stat-label">类型不一致</span>
+              <span class="stat-value" id="statTypeVolume">0</span>
+            </div>
+            <div class="stat-card note-mismatch">
+              <span class="stat-label">备注不一致</span>
+              <span class="stat-value" id="statNoteVolume">0</span>
+            </div>
+            <div class="stat-card consistency">
+              <span class="stat-label">全卷一致率</span>
+              <span class="stat-value" id="statConsistencyVolume">0%</span>
+            </div>
           </div>
         </div>
 

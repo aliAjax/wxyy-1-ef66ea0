@@ -1,5 +1,5 @@
 (function () {
-  const { DIFF_TYPES, compareMarkers, getStatistics, mergeMarkers, extractPageMarkers, extractPageImage, extractPageInfo, validatePackage } = window.DiffCompare;
+  const { DIFF_TYPES, compareMarkers, getStatistics, mergeMarkers, extractPageMarkers, extractPageImage, extractPageInfo, validatePackage, getPageCount, compareAllPages, getVolumeStatistics, mergeAllPages } = window.DiffCompare;
 
   const Doms = {
     backBtn: null,
@@ -18,13 +18,25 @@
     compareType: null,
     compareNote: null,
     compareBtn: null,
-    diffStats: null,
-    statMatch: null,
-    statOnlyA: null,
-    statOnlyB: null,
-    statType: null,
-    statNote: null,
-    statConsistency: null,
+    diffPageNav: null,
+    pageNavSummary: null,
+    pageNavList: null,
+    diffStatsSection: null,
+    statsScope: null,
+    diffStatsPage: null,
+    diffStatsVolume: null,
+    statMatchPage: null,
+    statOnlyAPage: null,
+    statOnlyBPage: null,
+    statTypePage: null,
+    statNotePage: null,
+    statConsistencyPage: null,
+    statMatchVolume: null,
+    statOnlyAVolume: null,
+    statOnlyBVolume: null,
+    statTypeVolume: null,
+    statNoteVolume: null,
+    statConsistencyVolume: null,
     showLayerA: null,
     showLayerB: null,
     showMatch: null,
@@ -47,10 +59,15 @@
     fileA: null,
     fileB: null,
     pageIndex: 0,
+    pageCount: 0,
+    allPageResults: null,
+    volumeStatistics: null,
+    currentPageResult: null,
     diffResults: null,
     diffGroups: null,
     statistics: null,
     currentFilter: 'all',
+    statsScope: 'page',
     layerVisibility: {
       a: true,
       b: true,
@@ -76,13 +93,25 @@
     Doms.compareType = document.getElementById('compareType');
     Doms.compareNote = document.getElementById('compareNote');
     Doms.compareBtn = document.getElementById('compareBtn');
-    Doms.diffStats = document.getElementById('diffStats');
-    Doms.statMatch = document.getElementById('statMatch');
-    Doms.statOnlyA = document.getElementById('statOnlyA');
-    Doms.statOnlyB = document.getElementById('statOnlyB');
-    Doms.statType = document.getElementById('statType');
-    Doms.statNote = document.getElementById('statNote');
-    Doms.statConsistency = document.getElementById('statConsistency');
+    Doms.diffPageNav = document.getElementById('diffPageNav');
+    Doms.pageNavSummary = document.getElementById('pageNavSummary');
+    Doms.pageNavList = document.getElementById('pageNavList');
+    Doms.diffStatsSection = document.getElementById('diffStatsSection');
+    Doms.statsScope = document.getElementById('statsScope');
+    Doms.diffStatsPage = document.getElementById('diffStatsPage');
+    Doms.diffStatsVolume = document.getElementById('diffStatsVolume');
+    Doms.statMatchPage = document.getElementById('statMatchPage');
+    Doms.statOnlyAPage = document.getElementById('statOnlyAPage');
+    Doms.statOnlyBPage = document.getElementById('statOnlyBPage');
+    Doms.statTypePage = document.getElementById('statTypePage');
+    Doms.statNotePage = document.getElementById('statNotePage');
+    Doms.statConsistencyPage = document.getElementById('statConsistencyPage');
+    Doms.statMatchVolume = document.getElementById('statMatchVolume');
+    Doms.statOnlyAVolume = document.getElementById('statOnlyAVolume');
+    Doms.statOnlyBVolume = document.getElementById('statOnlyBVolume');
+    Doms.statTypeVolume = document.getElementById('statTypeVolume');
+    Doms.statNoteVolume = document.getElementById('statNoteVolume');
+    Doms.statConsistencyVolume = document.getElementById('statConsistencyVolume');
     Doms.showLayerA = document.getElementById('showLayerA');
     Doms.showLayerB = document.getElementById('showLayerB');
     Doms.showMatch = document.getElementById('showMatch');
@@ -183,25 +212,26 @@
         data = rawData;
       }
 
-      const pageInfo = extractPageInfo(data, state.pageIndex);
-      const markerCount = extractPageMarkers(data, state.pageIndex).length;
+      const pageCount = getPageCount(data);
+      const totalMarkers = data.pages ? data.pages.reduce((acc, p) => acc + (p.markers ? p.markers.length : 0), 0) : 0;
 
       if (side === 'A') {
         state.dataA = data;
         state.fileA = file;
-        updateFileInfo('A', file, pageInfo, markerCount);
+        updateFileInfo('A', file, pageCount, totalMarkers);
         Doms.dropZoneA.style.display = 'none';
         Doms.dropZoneA.classList.add('has-file');
       } else {
         state.dataB = data;
         state.fileB = file;
-        updateFileInfo('B', file, pageInfo, markerCount);
+        updateFileInfo('B', file, pageCount, totalMarkers);
         Doms.dropZoneB.style.display = 'none';
         Doms.dropZoneB.classList.add('has-file');
       }
 
+      updatePageCount();
       updateCompareButton();
-      showToast(`${side} 标注文件导入成功，共 ${markerCount} 条标记`, 'success');
+      showToast(`${side} 标注文件导入成功，共 ${pageCount} 页、${totalMarkers} 条标记`, 'success');
 
       if (state.dataA && state.dataB) {
         const imageA = extractPageImage(state.dataA, state.pageIndex);
@@ -222,16 +252,20 @@
     }
   }
 
-  function updateFileInfo(side, file, pageInfo, markerCount) {
+  function updatePageCount() {
+    const countA = state.dataA ? getPageCount(state.dataA) : 0;
+    const countB = state.dataB ? getPageCount(state.dataB) : 0;
+    state.pageCount = Math.max(countA, countB);
+  }
+
+  function updateFileInfo(side, file, pageCount, totalMarkers) {
     const infoEl = side === 'A' ? Doms.fileInfoA : Doms.fileInfoB;
-    const displayName = pageInfo ? (pageInfo.name || pageInfo.fileName) : '未知页面';
     infoEl.innerHTML = `
       <div class="file-info-row">
         <span class="file-info-icon">📄</span>
         <div class="file-info-text">
           <div class="file-info-name">${escapeHtmlSimple(file.name)}</div>
-          <div class="file-info-meta">${formatFileSize(file.size)} · ${markerCount} 条标记</div>
-          <div class="file-info-page">页面：${escapeHtmlSimple(displayName)}</div>
+          <div class="file-info-meta">${formatFileSize(file.size)} · ${pageCount} 页 · ${totalMarkers} 条标记</div>
         </div>
         <button type="button" class="file-remove-btn" data-remove="${side}" title="移除文件">×</button>
       </div>
@@ -266,36 +300,131 @@
   function performComparison() {
     if (!state.dataA || !state.dataB) return;
 
-    const markersA = extractPageMarkers(state.dataA, state.pageIndex);
-    const markersB = extractPageMarkers(state.dataB, state.pageIndex);
-
     const options = {
       threshold: parseFloat(Doms.thresholdInput.value),
       compareType: Doms.compareType.checked,
       compareNote: Doms.compareNote.checked,
     };
 
-    state.diffResults = compareMarkers(markersA, markersB, options);
+    state.allPageResults = compareAllPages(state.dataA, state.dataB, options);
+    state.volumeStatistics = getVolumeStatistics(state.allPageResults);
+    state.pageIndex = 0;
+
+    loadPageData(0);
+
+    renderPageNav();
+    Doms.diffPageNav.style.display = 'block';
+    Doms.diffStatsSection.style.display = 'block';
+    Doms.mergeSettings.style.display = 'block';
+    Doms.exportMergedBtn.disabled = false;
+
+    const vs = state.volumeStatistics;
+    showToast(`全卷比对完成：共 ${vs.pageCount} 页，${vs.match} 匹配，${vs.onlyA + vs.onlyB} 独有，${vs.typeMismatch + vs.noteMismatch} 不一致，一致率 ${vs.consistency}%`, 'info');
+  }
+
+  function loadPageData(pageIndex) {
+    if (!state.allPageResults || pageIndex < 0 || pageIndex >= state.allPageResults.length) return;
+
+    state.pageIndex = pageIndex;
+    state.currentPageResult = state.allPageResults[pageIndex];
+    state.diffResults = state.currentPageResult.diffResults;
     state.diffGroups = window.DiffCompare.groupByType(state.diffResults);
-    state.statistics = getStatistics(state.diffResults);
+    state.statistics = state.currentPageResult.statistics;
+
+    const pageResult = state.currentPageResult;
+    const imageA = pageResult.imageA;
+    const imageB = pageResult.imageB;
+
+    if (imageA || imageB) {
+      Doms.diffImage.src = imageB || imageA;
+      Doms.diffImage.style.display = 'block';
+      Doms.diffEmpty.style.display = 'none';
+    } else {
+      Doms.diffImage.removeAttribute('src');
+      Doms.diffImage.style.display = 'none';
+      Doms.diffEmpty.style.display = 'flex';
+    }
 
     renderStatistics();
     renderDiffMarkers();
     renderDiffList();
+    updatePageNavActive();
+  }
 
-    Doms.diffStats.style.display = 'flex';
-    Doms.mergeSettings.style.display = 'block';
-    Doms.exportMergedBtn.disabled = false;
+  function switchPage(pageIndex) {
+    if (pageIndex < 0 || pageIndex >= state.pageCount) return;
+    loadPageData(pageIndex);
+  }
 
-    showToast(`比对完成：${state.statistics.match} 匹配，${state.statistics.onlyA + state.statistics.onlyB} 独有，${state.statistics.typeMismatch + state.statistics.noteMismatch} 不一致`, 'info');
+  function renderPageNav() {
+    if (!state.allPageResults || state.allPageResults.length === 0) {
+      Doms.pageNavList.innerHTML = '';
+      Doms.pageNavSummary.textContent = '共 0 页';
+      return;
+    }
+
+    Doms.pageNavSummary.textContent = `共 ${state.allPageResults.length} 页`;
+
+    let html = '';
+    state.allPageResults.forEach((pr, idx) => {
+      const stats = pr.statistics || {};
+      const hasDiff = (stats.onlyA || 0) + (stats.onlyB || 0) + (stats.typeMismatch || 0) + (stats.noteMismatch || 0) > 0;
+      const existsClass = !pr.existsA || !pr.existsB ? ' missing' : '';
+      const diffClass = hasDiff ? ' has-diff' : ' all-match';
+
+      html += `
+        <button type="button" class="page-nav-item${existsClass}${diffClass}${idx === state.pageIndex ? ' active' : ''}"
+                data-page-index="${idx}">
+          <span class="page-nav-item-num">${idx + 1}</span>
+          <span class="page-nav-item-name">${escapeHtmlSimple(pr.pageName)}</span>
+          <span class="page-nav-item-stats">
+            <span class="stat-match" title="匹配">${stats.match || 0}</span>
+            <span class="stat-diff" title="差异">${(stats.onlyA || 0) + (stats.onlyB || 0) + (stats.typeMismatch || 0) + (stats.noteMismatch || 0)}</span>
+          </span>
+        </button>
+      `;
+    });
+
+    Doms.pageNavList.innerHTML = html;
+  }
+
+  function updatePageNavActive() {
+    const items = Doms.pageNavList.querySelectorAll('.page-nav-item');
+    items.forEach((item, idx) => {
+      item.classList.toggle('active', idx === state.pageIndex);
+    });
+  }
+
+  function toggleStatsScope(scope) {
+    if (scope !== 'page' && scope !== 'volume') return;
+
+    state.statsScope = scope;
+    Doms.statsScope.textContent = scope === 'page' ? '当前页统计' : '全卷汇总统计';
+
+    const toggleBtns = Doms.diffStatsSection.querySelectorAll('.stats-toggle-btn');
+    toggleBtns.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.scope === scope);
+    });
+
+    Doms.diffStatsPage.style.display = scope === 'page' ? 'flex' : 'none';
+    Doms.diffStatsVolume.style.display = scope === 'volume' ? 'flex' : 'none';
+
+    if (scope === 'volume' && state.volumeStatistics) {
+      renderVolumeStatistics();
+    }
   }
 
   function clearComparison() {
+    state.allPageResults = null;
+    state.volumeStatistics = null;
+    state.currentPageResult = null;
     state.diffResults = null;
     state.diffGroups = null;
     state.statistics = null;
+    state.pageIndex = 0;
 
-    Doms.diffStats.style.display = 'none';
+    Doms.diffPageNav.style.display = 'none';
+    Doms.diffStatsSection.style.display = 'none';
     Doms.diffMarkersLayer.innerHTML = '';
     Doms.diffList.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px 8px;font-size:13px;">请导入两份标注后开始比对</p>';
     Doms.mergeSettings.style.display = 'none';
@@ -311,12 +440,12 @@
   function renderStatistics() {
     if (!state.statistics) return;
 
-    Doms.statMatch.textContent = state.statistics.match;
-    Doms.statOnlyA.textContent = state.statistics.onlyA;
-    Doms.statOnlyB.textContent = state.statistics.onlyB;
-    Doms.statType.textContent = state.statistics.typeMismatch;
-    Doms.statNote.textContent = state.statistics.noteMismatch;
-    Doms.statConsistency.textContent = state.statistics.consistency + '%';
+    Doms.statMatchPage.textContent = state.statistics.match;
+    Doms.statOnlyAPage.textContent = state.statistics.onlyA;
+    Doms.statOnlyBPage.textContent = state.statistics.onlyB;
+    Doms.statTypePage.textContent = state.statistics.typeMismatch;
+    Doms.statNotePage.textContent = state.statistics.noteMismatch;
+    Doms.statConsistencyPage.textContent = state.statistics.consistency + '%';
 
     const tabs = Doms.diffFilterTabs.querySelectorAll('.filter-tab');
     tabs.forEach((tab) => {
@@ -330,6 +459,18 @@
       else if (filter === 'note_mismatch') count = state.statistics.noteMismatch;
       tab.innerHTML = `${tab.textContent.split(' ')[0]} <span class="tab-count">${count}</span>`;
     });
+  }
+
+  function renderVolumeStatistics() {
+    if (!state.volumeStatistics) return;
+
+    const vs = state.volumeStatistics;
+    Doms.statMatchVolume.textContent = vs.match;
+    Doms.statOnlyAVolume.textContent = vs.onlyA;
+    Doms.statOnlyBVolume.textContent = vs.onlyB;
+    Doms.statTypeVolume.textContent = vs.typeMismatch;
+    Doms.statNoteVolume.textContent = vs.noteMismatch;
+    Doms.statConsistencyVolume.textContent = vs.consistency + '%';
   }
 
   function renderDiffMarkers() {
@@ -528,27 +669,38 @@
   }
 
   function exportMerged() {
-    if (!state.diffResults) return;
+    if (!state.allPageResults) return;
 
     const options = {
       prefer: Doms.mergePrefer.value,
       mergeStrategy: Doms.mergeStrategy.value === 'combine' ? 'combine' : 'conflict',
     };
 
-    const merged = mergeMarkers(state.diffResults, options);
-
+    const mergedPages = mergeAllPages(state.allPageResults, options);
     const baseData = state.dataA || state.dataB;
+
+    let totalMarkers = 0;
+    mergedPages.forEach((mp) => {
+      totalMarkers += mp.markers.length;
+    });
 
     if (window.ProjectPackage) {
       try {
         const baseState = window.ProjectPackage.packageToState(baseData);
-        if (baseState.pages && baseState.pages[state.pageIndex]) {
-          baseState.pages[state.pageIndex].markers = merged.map(({
-            _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
-            _center, _type, _note, ...rest
-          }) => rest);
-          baseState.pages[state.pageIndex].updatedAt = new Date().toISOString();
+
+        if (baseState.pages && Array.isArray(baseState.pages)) {
+          mergedPages.forEach((mp) => {
+            const pageIdx = mp.pageIndex;
+            if (baseState.pages[pageIdx]) {
+              baseState.pages[pageIdx].markers = mp.markers.map(({
+                _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
+                _center, _type, _note, ...rest
+              }) => rest);
+              baseState.pages[pageIdx].updatedAt = new Date().toISOString();
+            }
+          });
         }
+
         baseState.updatedAt = new Date().toISOString();
 
         if (baseData.format === window.ProjectPackage.PACKAGE_FORMAT
@@ -567,24 +719,40 @@
           fileA: state.fileA ? state.fileA.name : 'A',
           fileB: state.fileB ? state.fileB.name : 'B',
           mergeOptions: options,
-          statistics: state.statistics,
+          pageCount: mergedPages.length,
+          totalMarkers: totalMarkers,
+          volumeStatistics: state.volumeStatistics,
+          pageStatistics: state.allPageResults.map(pr => ({
+            pageIndex: pr.pageIndex,
+            pageName: pr.pageName,
+            statistics: pr.statistics,
+          })),
           mergedAt: new Date().toISOString(),
         };
         delete pkg._checksum;
         pkg._checksum = window.ProjectPackage.computeChecksum(pkg);
 
         window.ProjectPackage.downloadPackage(pkg);
-        showToast(`合并结果已导出，共 ${merged.length} 条标记`, 'success');
+        showToast(`合并结果已导出，共 ${mergedPages.length} 页、${totalMarkers} 条标记`, 'success');
         return;
       } catch (e) {
         console.warn('标准导出流程失败，回退至基础导出：', e);
       }
     }
 
-    const fallbackMarkers = merged.map(({
-      _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
-      _center, _type, _note, ...rest
-    }) => rest);
+    const exportPages = mergedPages.map((mp) => {
+      const basePage = baseData.pages && baseData.pages[mp.pageIndex]
+        ? baseData.pages[mp.pageIndex]
+        : {};
+      return {
+        ...basePage,
+        markers: mp.markers.map(({
+          _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
+          _center, _type, _note, ...rest
+        }) => rest),
+        updatedAt: new Date().toISOString(),
+      };
+    });
 
     const exportData = {
       format: 'archive-volume-damage',
@@ -594,7 +762,14 @@
         fileA: state.fileA ? state.fileA.name : 'A',
         fileB: state.fileB ? state.fileB.name : 'B',
         mergeOptions: options,
-        statistics: state.statistics,
+        pageCount: mergedPages.length,
+        totalMarkers: totalMarkers,
+        volumeStatistics: state.volumeStatistics,
+        pageStatistics: state.allPageResults.map(pr => ({
+          pageIndex: pr.pageIndex,
+          pageName: pr.pageName,
+          statistics: pr.statistics,
+        })),
         mergedAt: new Date().toISOString(),
       },
       volume: {
@@ -606,13 +781,7 @@
             : '合并标注结果')) + '（合并）',
         updatedAt: new Date().toISOString(),
       },
-      pages: [
-        {
-          ...(baseData.pages && baseData.pages[state.pageIndex] ? baseData.pages[state.pageIndex] : {}),
-          markers: fallbackMarkers,
-          updatedAt: new Date().toISOString(),
-        },
-      ],
+      pages: exportPages,
       damageTypes: baseData.damageTypes || [],
     };
 
@@ -626,7 +795,7 @@
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(link.href), 1500);
 
-    showToast(`合并结果已导出，共 ${merged.length} 条标记`, 'success');
+    showToast(`合并结果已导出，共 ${mergedPages.length} 页、${totalMarkers} 条标记`, 'success');
   }
 
   function setupDropZone(dropZone, fileInput, browseBtn, side) {
@@ -702,6 +871,20 @@
         e.stopPropagation();
         removeFile(removeBtn.dataset.remove);
       }
+
+      const pageNavItem = e.target.closest('.page-nav-item');
+      if (pageNavItem) {
+        e.stopPropagation();
+        const pageIndex = parseInt(pageNavItem.dataset.pageIndex);
+        switchPage(pageIndex);
+      }
+
+      const statsToggleBtn = e.target.closest('.stats-toggle-btn');
+      if (statsToggleBtn) {
+        e.stopPropagation();
+        const scope = statsToggleBtn.dataset.scope;
+        toggleStatsScope(scope);
+      }
     });
 
     Doms.thresholdSlider.addEventListener('input', () => {
@@ -762,6 +945,22 @@
       if (e.key === 'Escape') {
         clearHighlight();
       }
+
+      if (e.target.matches('input, textarea, select')) return;
+
+      if (state.allPageResults && state.allPageResults.length > 0) {
+        if (e.key === 'ArrowLeft' && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          if (state.pageIndex > 0) {
+            switchPage(state.pageIndex - 1);
+          }
+        } else if (e.key === 'ArrowRight' && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          if (state.pageIndex < state.pageCount - 1) {
+            switchPage(state.pageIndex + 1);
+          }
+        }
+      }
     });
   }
 
@@ -802,6 +1001,8 @@
     renderDiffMarkers: renderDiffMarkers,
     renderDiffList: renderDiffList,
     exportMerged: exportMerged,
-    handleFileSelect: handleFileSelect
+    handleFileSelect: handleFileSelect,
+    switchPage: switchPage,
+    toggleStatsScope: toggleStatsScope,
   };
 })();

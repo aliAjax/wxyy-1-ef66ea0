@@ -287,6 +287,125 @@
     return { valid: true };
   }
 
+  function getPageCount(packageData) {
+    if (!packageData || !packageData.pages || !Array.isArray(packageData.pages)) {
+      return 0;
+    }
+    return packageData.pages.length;
+  }
+
+  function compareAllPages(dataA, dataB, options = {}) {
+    const countA = getPageCount(dataA);
+    const countB = getPageCount(dataB);
+    const maxPages = Math.max(countA, countB);
+    const results = [];
+
+    for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+      const markersA = extractPageMarkers(dataA, pageIndex);
+      const markersB = extractPageMarkers(dataB, pageIndex);
+      const pageInfoA = extractPageInfo(dataA, pageIndex);
+      const pageInfoB = extractPageInfo(dataB, pageIndex);
+      const imageA = extractPageImage(dataA, pageIndex);
+      const imageB = extractPageImage(dataB, pageIndex);
+
+      const diffResults = compareMarkers(markersA, markersB, options);
+      const statistics = getStatistics(diffResults);
+
+      results.push({
+        pageIndex,
+        pageInfoA,
+        pageInfoB,
+        imageA,
+        imageB,
+        markersA,
+        markersB,
+        diffResults,
+        statistics,
+        pageName: pageInfoA
+          ? (pageInfoA.name || pageInfoA.fileName || `第${pageIndex + 1}页`)
+          : (pageInfoB ? (pageInfoB.name || pageInfoB.fileName || `第${pageIndex + 1}页`) : `第${pageIndex + 1}页`),
+        existsA: pageIndex < countA,
+        existsB: pageIndex < countB,
+      });
+    }
+
+    return results;
+  }
+
+  function getVolumeStatistics(pageResults) {
+    if (!Array.isArray(pageResults) || pageResults.length === 0) {
+      return {
+        total: 0,
+        match: 0,
+        onlyA: 0,
+        onlyB: 0,
+        typeMismatch: 0,
+        noteMismatch: 0,
+        aTotal: 0,
+        bTotal: 0,
+        consistency: 0,
+        pageCount: 0,
+      };
+    }
+
+    let total = 0;
+    let match = 0;
+    let onlyA = 0;
+    let onlyB = 0;
+    let typeMismatch = 0;
+    let noteMismatch = 0;
+    let aTotal = 0;
+    let bTotal = 0;
+    let matchedPages = 0;
+
+    pageResults.forEach((pr) => {
+      if (pr.statistics) {
+        total += pr.statistics.total || 0;
+        match += pr.statistics.match || 0;
+        onlyA += pr.statistics.onlyA || 0;
+        onlyB += pr.statistics.onlyB || 0;
+        typeMismatch += pr.statistics.typeMismatch || 0;
+        noteMismatch += pr.statistics.noteMismatch || 0;
+        aTotal += pr.statistics.aTotal || 0;
+        bTotal += pr.statistics.bTotal || 0;
+        if (pr.existsA && pr.existsB) {
+          matchedPages++;
+        }
+      }
+    });
+
+    return {
+      total,
+      match,
+      onlyA,
+      onlyB,
+      typeMismatch,
+      noteMismatch,
+      aTotal,
+      bTotal,
+      consistency: total > 0 ? Math.round((match / total) * 100) : 0,
+      pageCount: pageResults.length,
+      matchedPages,
+    };
+  }
+
+  function mergeAllPages(pageResults, options = {}) {
+    if (!Array.isArray(pageResults) || pageResults.length === 0) {
+      return [];
+    }
+
+    return pageResults.map((pr) => {
+      const merged = mergeMarkers(pr.diffResults, options);
+      return {
+        pageIndex: pr.pageIndex,
+        pageInfoA: pr.pageInfoA,
+        pageInfoB: pr.pageInfoB,
+        markers: merged,
+        pageName: pr.pageName,
+      };
+    });
+  }
+
   const DiffCompare = {
     DIFF_TYPES,
     compareMarkers,
@@ -300,6 +419,10 @@
     getMarkerCenter,
     calculateDistance,
     isMigratedMarker,
+    getPageCount,
+    compareAllPages,
+    getVolumeStatistics,
+    mergeAllPages,
   };
 
   global.DiffCompare = DiffCompare;
