@@ -33,6 +33,7 @@
     damageTypes: cloneValue(DEFAULT_DAMAGE_TYPES),
     calibrationSessions: [],
     calibrationPlans: [],
+    qualityReport: null,
   };
 
   function readRaw() {
@@ -209,6 +210,12 @@
       });
     } else {
       state.calibrationPlans = [];
+    }
+
+    if (raw.qualityReport && typeof raw.qualityReport === "object" && raw.qualityReport.issues) {
+      state.qualityReport = raw.qualityReport;
+    } else {
+      state.qualityReport = null;
     }
 
     return state;

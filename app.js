@@ -7,6 +7,7 @@
   const CandidateManager = window.CandidateManager;
   const CalibrationUI = window.CalibrationUI;
   const TaskQueue = window.TaskQueue;
+  const QualityReport = window.QualityReport;
 
   const imageInput = document.getElementById("imageInput");
   const noteInput = document.getElementById("noteInput");
@@ -2323,6 +2324,370 @@
   var currentTaskIndicator = document.getElementById("currentTaskIndicator");
   var suppressTaskSync = false;
 
+  var qualityReportBtn = document.getElementById("qualityReportBtn");
+  var qualityReportModal = document.getElementById("qualityReportModal");
+  var closeQualityReportBtn = document.getElementById("closeQualityReportBtn");
+  var closeQualityReportFooterBtn = document.getElementById("closeQualityReportFooterBtn");
+  var qrRefreshBtn = document.getElementById("qrRefreshBtn");
+  var qrExportBtn = document.getElementById("qrExportBtn");
+  var qrGeneratedAt = document.getElementById("qrGeneratedAt");
+  var qrSummaryCards = document.getElementById("qrSummaryCards");
+  var qrByType = document.getElementById("qrByType");
+  var qrByPage = document.getElementById("qrByPage");
+  var qrSeverityFilter = document.getElementById("qrSeverityFilter");
+  var qrEmpty = document.getElementById("qrEmpty");
+  var qrFooterStats = document.getElementById("qrFooterStats");
+  var currentQrSeverityFilter = "all";
+
+  function openQualityReportModal() {
+    if (QualityReport && typeof QualityReport.init === "function") {
+      QualityReport.init();
+    }
+    renderQualityReport();
+    qualityReportModal.style.display = "flex";
+  }
+
+  function closeQualityReportModal() {
+    qualityReportModal.style.display = "none";
+  }
+
+  function formatDateTime(isoString) {
+    if (!isoString) return "";
+    try {
+      var d = new Date(isoString);
+      return d.toLocaleString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (e) {
+      return isoString;
+    }
+  }
+
+  function getSeverityLabel(severity) {
+    switch (severity) {
+      case "critical":
+        return "严重";
+      case "warning":
+        return "警告";
+      case "info":
+        return "提示";
+      default:
+        return severity;
+    }
+  }
+
+  function getSeverityBadgeClass(severity) {
+    return "qr-severity qr-severity-" + (severity || "info");
+  }
+
+  function getIssueTypeIcon(type) {
+    switch (type) {
+      case "density_anomaly":
+        return "📊";
+      case "pending_candidates":
+        return "🔮";
+      case "review_rejected":
+        return "🔴";
+      case "diff_mismatch":
+        return "🔀";
+      case "low_quality_migration":
+        return "📐";
+      default:
+        return "⚠";
+    }
+  }
+
+  function filterIssuesBySeverity(issues, filterValue) {
+    if (!Array.isArray(issues)) return [];
+    if (filterValue === "all") return issues;
+    if (filterValue === "critical") {
+      return issues.filter(function (i) { return i.severity === "critical"; });
+    }
+    if (filterValue === "warning") {
+      return issues.filter(function (i) {
+        return i.severity === "critical" || i.severity === "warning";
+      });
+    }
+    if (filterValue === "info") {
+      return issues.filter(function (i) { return i.severity === "info"; });
+    }
+    return issues;
+  }
+
+  function renderQualityReport() {
+    var report = QualityReport
+      ? QualityReport.getReport({ force: true })
+      : null;
+
+    if (report && State && typeof State.saveQualityReport === "function") {
+      State.saveQualityReport(report);
+    }
+
+    if (!report) {
+      qrEmpty.style.display = "flex";
+      qrSummaryCards.innerHTML = "";
+      qrByType.innerHTML = "";
+      qrByPage.innerHTML = "";
+      qrFooterStats.innerHTML = "";
+      qrGeneratedAt.textContent = "";
+      return;
+    }
+
+    var summary = report.summary || {};
+    qrGeneratedAt.textContent = "生成时间：" + formatDateTime(report.generatedAt);
+
+    var criticalCount = summary.countsBySeverity ? summary.countsBySeverity.critical || 0 : 0;
+    var warningCount = summary.countsBySeverity ? summary.countsBySeverity.warning || 0 : 0;
+    var infoCount = summary.countsBySeverity ? summary.countsBySeverity.info || 0 : 0;
+
+    qrSummaryCards.innerHTML =
+      '<div class="qr-summary-card qr-sc-total">' +
+        '<div class="qr-sc-label">总问题数</div>' +
+        '<div class="qr-sc-value">' + (summary.totalIssues || 0) + '</div>' +
+        '<div class="qr-sc-sub">涉及 ' + (summary.pagesWithIssues || 0) + ' 页</div>' +
+      '</div>' +
+      '<div class="qr-summary-card qr-sc-critical">' +
+        '<div class="qr-sc-label">严重</div>' +
+        '<div class="qr-sc-value">' + criticalCount + '</div>' +
+        '<div class="qr-sc-sub">需立即处理</div>' +
+      '</div>' +
+      '<div class="qr-summary-card qr-sc-warning">' +
+        '<div class="qr-sc-label">警告</div>' +
+        '<div class="qr-sc-value">' + warningCount + '</div>' +
+        '<div class="qr-sc-sub">建议尽快处理</div>' +
+      '</div>' +
+      '<div class="qr-summary-card qr-sc-info">' +
+        '<div class="qr-sc-label">提示</div>' +
+        '<div class="qr-sc-value">' + infoCount + '</div>' +
+        '<div class="qr-sc-sub">可择机处理</div>' +
+      '</div>' +
+      '<div class="qr-summary-card qr-sc-progress">' +
+        '<div class="qr-sc-label">复核进度</div>' +
+        '<div class="qr-sc-value">' + (summary.reviewProgress || 0) + '%</div>' +
+        '<div class="qr-sc-sub">' + (summary.totalReviewed || 0) + '/' + (summary.totalMarkers || 0) + ' 条</div>' +
+      '</div>' +
+      '<div class="qr-summary-card qr-sc-pages">' +
+        '<div class="qr-sc-label">项目概况</div>' +
+        '<div class="qr-sc-value">' + (summary.totalPages || 0) + ' 页</div>' +
+        '<div class="qr-sc-sub">' + (summary.totalMarkers || 0) + ' 条标记</div>' +
+      '</div>';
+
+    var byTypeData = report.byType || [];
+    if (byTypeData.length > 0) {
+      qrByType.innerHTML = byTypeData.map(function (typeItem) {
+        var typeLabel = QualityReport && QualityReport.ISSUE_TYPE_LABELS
+          ? (QualityReport.ISSUE_TYPE_LABELS[typeItem.type] || typeItem.type)
+          : typeItem.type;
+        var tc = typeItem.counts || typeItem.counts || { critical: 0, warning: 0, info: 0 };
+        return (
+          '<div class="qr-type-card">' +
+            '<div class="qr-type-header">' +
+              '<span class="qr-type-icon">' + getIssueTypeIcon(typeItem.type) + '</span>' +
+              '<span class="qr-type-title">' + escapeHtmlSimple(typeLabel) + '</span>' +
+              '<span class="qr-type-count">' + typeItem.issues.length + ' 项</span>' +
+            '</div>' +
+            '<div class="qr-type-counts">' +
+              (tc.critical ? '<span class="qr-tc qr-tc-critical">严重 ' + tc.critical + '</span>' : '') +
+              (tc.warning ? '<span class="qr-tc qr-tc-warning">警告 ' + tc.warning + '</span>' : '') +
+              (tc.info ? '<span class="qr-tc qr-tc-info">提示 ' + tc.info + '</span>' : '') +
+            '</div>' +
+          '</div>'
+        );
+      }).join("");
+    } else {
+      qrByType.innerHTML = '<div class="qr-empty-hint">暂无按类型分类的问题</div>';
+    }
+
+    var byPageData = report.byPage || [];
+    var filteredByPage = byPageData.map(function (pageItem) {
+      return {
+        pageId: pageItem.pageId,
+        pageName: pageItem.pageName,
+        counts: pageItem.counts,
+        issues: filterIssuesBySeverity(pageItem.issues, currentQrSeverityFilter),
+      };
+    }).filter(function (p) { return p.issues.length > 0; });
+
+    if (filteredByPage.length > 0) {
+      qrByPage.innerHTML = filteredByPage.map(function (pageItem) {
+        var pc = pageItem.counts || { critical: 0, warning: 0, info: 0 };
+        var issuesHtml = pageItem.issues.map(function (issue) {
+          var typeLabel = QualityReport && QualityReport.ISSUE_TYPE_LABELS
+            ? (QualityReport.ISSUE_TYPE_LABELS[issue.type] || issue.type)
+            : issue.type;
+          var navHint = "";
+          var showNavButton = true;
+          if (issue.type === "pending_candidates") {
+            navHint = "前往处理候选";
+          } else if (issue.type === "review_rejected") {
+            navHint = "前往复核处理";
+          } else if (issue.type === "low_quality_migration") {
+            navHint = "前往核对位置";
+          } else if (issue.type === "diff_mismatch") {
+            navHint = "前往差异比对";
+          } else {
+            navHint = "跳转该页面";
+          }
+          var extraInfo = "";
+          if (issue.data) {
+            if (issue.type === "review_rejected") {
+              extraInfo = '<div class="qr-issue-extra">' +
+                '退回：' + (issue.data.rejectedCount || 0) + ' 项，' +
+                '存疑：' + (issue.data.doubtfulCount || 0) + ' 项' +
+                '</div>';
+            } else if (issue.type === "pending_candidates") {
+              extraInfo = '<div class="qr-issue-extra">' +
+                '待处理：' + (issue.data.pending || 0) + '/' + (issue.data.total || 0) +
+                '（' + (issue.data.pendingRatio || 0) + '%）' +
+                '</div>';
+            } else if (issue.type === "low_quality_migration") {
+              extraInfo = '<div class="qr-issue-extra">' +
+                '可能有误差：' + (issue.data.lowQualityCount || 0) + '/' + (issue.data.totalMigrated || 0) + ' 项' +
+                (issue.data.positionAdjustedCount ? '，其中位置已被调整：' + issue.data.positionAdjustedCount + ' 项' : '') +
+                '</div>';
+            } else if (issue.type === "density_anomaly") {
+              extraInfo = '<div class="qr-issue-extra">' +
+                '当前：' + (issue.data.markerCount || 0) + ' 个，' +
+                '平均：' + (issue.data.averageCount || 0) + ' 个' +
+                '</div>';
+            }
+          }
+          return (
+            '<div class="qr-issue-item" data-page-id="' + escapeHtmlSimple(issue.pageId || "") + '" data-issue-id="' + escapeHtmlSimple(issue.id || "") + '">' +
+              '<div class="qr-issue-header">' +
+                '<span class="' + getSeverityBadgeClass(issue.severity) + '">' +
+                  getSeverityLabel(issue.severity) +
+                '</span>' +
+                '<span class="qr-issue-type">' +
+                  getIssueTypeIcon(issue.type) + ' ' + escapeHtmlSimple(typeLabel) +
+                '</span>' +
+              '</div>' +
+              '<div class="qr-issue-desc">' + escapeHtmlSimple(issue.description || "") + '</div>' +
+              extraInfo +
+              '<div class="qr-issue-actions">' +
+                (showNavButton
+                  ? '<button type="button" class="small-btn primary qr-nav-btn" ' +
+                      'data-page-id="' + escapeHtmlSimple(issue.pageId || "") + '" ' +
+                      'data-issue-id="' + escapeHtmlSimple(issue.id || "") + '">' +
+                      '➜ ' + navHint +
+                    '</button>'
+                  : '') +
+              '</div>' +
+            '</div>'
+          );
+        }).join("");
+
+        return (
+          '<div class="qr-page-card">' +
+            '<div class="qr-page-header">' +
+              '<span class="qr-page-title">📄 ' + escapeHtmlSimple(pageItem.pageName || "") + '</span>' +
+              '<div class="qr-page-counts">' +
+                (pc.critical ? '<span class="qr-pc qr-pc-critical">严重 ' + pc.critical + '</span>' : '') +
+                (pc.warning ? '<span class="qr-pc qr-pc-warning">警告 ' + pc.warning + '</span>' : '') +
+                (pc.info ? '<span class="qr-pc qr-pc-info">提示 ' + pc.info + '</span>' : '') +
+              '</div>' +
+            '</div>' +
+            '<div class="qr-page-issues">' + issuesHtml + '</div>' +
+          '</div>'
+        );
+      }).join("");
+      qrEmpty.style.display = "none";
+    } else {
+      qrByPage.innerHTML = "";
+      qrEmpty.style.display = "flex";
+    }
+
+    qrFooterStats.innerHTML =
+      '<span class="qr-fs-item">📊 问题总数：<strong>' + (summary.totalIssues || 0) + '</strong></span>' +
+      '<span class="qr-fs-item">🔴 严重：<strong>' + criticalCount + '</strong></span>' +
+      '<span class="qr-fs-item">🟡 警告：<strong>' + warningCount + '</strong></span>' +
+      '<span class="qr-fs-item">🔵 提示：<strong>' + infoCount + '</strong></span>' +
+      '<span class="qr-fs-item">📖 复核进度：<strong>' + (summary.reviewProgress || 0) + '%</strong></span>';
+  }
+
+  function handleQrNavigate(issueId) {
+    var report = QualityReport ? QualityReport.getReport() : null;
+    if (!report || !report.issues) return;
+    var issue = report.issues.find(function (i) { return i.id === issueId; });
+    if (!issue) return;
+
+    var navResult = QualityReport.navigateToIssue(issue);
+    if (!navResult || !navResult.success) {
+      showToast(navResult && navResult.reason ? navResult.reason : "跳转失败", "error");
+      return;
+    }
+    var target = navResult.target;
+    closeQualityReportModal();
+
+    if (target.pageId) {
+      State.switchPage(target.pageId);
+    }
+
+    if (target.view === "review") {
+      setTimeout(function () {
+        if (typeof window.open === "function") {
+          window.open("review.html", "_blank");
+        }
+      }, 300);
+    } else if (target.view === "candidates") {
+      showToast("已切换到对应页面，请在右侧智能识别面板继续处理候选", "info", 4000);
+    } else if (target.view === "calibration") {
+      setTimeout(function () {
+        if (calibrationBtn && typeof calibrationBtn.click === "function") {
+          calibrationBtn.click();
+        }
+      }, 300);
+      showToast("已切换到对应页面，可在跨页校准对话框中核对标记位置", "info", 4000);
+    } else if (target.view === "diff") {
+      setTimeout(function () {
+        if (typeof window.open === "function") {
+          window.open("diff.html", "_blank");
+        }
+      }, 300);
+    } else {
+      showToast("已切换到对应页面", "success", 2000);
+    }
+
+    if (target.markerId && Render && typeof Render.highlightMarker === "function") {
+      setTimeout(function () {
+        Render.highlightMarker(target.markerId);
+      }, 500);
+    }
+  }
+
+  function exportQualityReportJson() {
+    var report = QualityReport
+      ? QualityReport.exportReportData()
+      : null;
+    if (!report) {
+      showToast("报告数据为空，无法导出", "error");
+      return;
+    }
+    try {
+      var jsonStr = JSON.stringify(report, null, 2);
+      var blob = new Blob([jsonStr], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      var safeTitle = (State.all.volumeTitle || State.all.volumeId || "quality-report")
+        .replace(/[\\/:*?"<>|\s]+/g, "_");
+      a.href = url;
+      a.download = safeTitle + "-质检报告-" +
+        new Date().toISOString().replace(/[:.]/g, "-") + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      showToast("质检报告已导出为 JSON 文件", "success");
+    } catch (e) {
+      console.error("导出质检报告失败", e);
+      showToast("导出失败：" + e.message, "error");
+    }
+  }
+
   function openTaskQueueModal() {
     renderTaskQueueList();
     updateTaskQueueStats();
@@ -3412,6 +3777,47 @@
       syncCurrentPageToTaskQueue();
       syncDamageTypesToActiveTask();
     });
+
+    if (qualityReportBtn) {
+      qualityReportBtn.addEventListener("click", openQualityReportModal);
+    }
+    if (closeQualityReportBtn) {
+      closeQualityReportBtn.addEventListener("click", closeQualityReportModal);
+    }
+    if (closeQualityReportFooterBtn) {
+      closeQualityReportFooterBtn.addEventListener("click", closeQualityReportModal);
+    }
+    if (qualityReportModal) {
+      qualityReportModal.addEventListener("click", function (e) {
+        if (e.target === qualityReportModal) closeQualityReportModal();
+      });
+    }
+    if (qrRefreshBtn) {
+      qrRefreshBtn.addEventListener("click", function () {
+        if (QualityReport) {
+          QualityReport.invalidateCache();
+        }
+        renderQualityReport();
+        showToast("质检报告已重新计算", "success", 2000);
+      });
+    }
+    if (qrExportBtn) {
+      qrExportBtn.addEventListener("click", exportQualityReportJson);
+    }
+    if (qrSeverityFilter) {
+      qrSeverityFilter.addEventListener("change", function () {
+        currentQrSeverityFilter = qrSeverityFilter.value;
+        renderQualityReport();
+      });
+    }
+    if (qrByPage) {
+      qrByPage.addEventListener("click", function (e) {
+        var navBtn = e.target.closest(".qr-nav-btn");
+        if (navBtn && navBtn.dataset.issueId) {
+          handleQrNavigate(navBtn.dataset.issueId);
+        }
+      });
+    }
   }
 
   function bootstrap() {
@@ -3468,6 +3874,9 @@
     }
     if (CalibrationUI) {
       CalibrationUI.init();
+    }
+    if (QualityReport) {
+      QualityReport.init();
     }
     bindEvents();
     setMode("point");

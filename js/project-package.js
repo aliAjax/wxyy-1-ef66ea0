@@ -285,6 +285,30 @@
       }
     }
 
+    var qualityReportData = null;
+    try {
+      if (state.qualityReport && typeof state.qualityReport === "object" && state.qualityReport.issues) {
+        qualityReportData = JSON.parse(JSON.stringify(state.qualityReport));
+      } else if (global.QualityReport && typeof global.QualityReport.exportReportData === "function") {
+        qualityReportData = global.QualityReport.exportReportData();
+      }
+    } catch (e) {
+      console.warn("导出质检报告失败", e);
+      qualityReportData = null;
+    }
+
+    var qualityReportSummary = null;
+    if (qualityReportData && qualityReportData.summary) {
+      qualityReportSummary = {
+        totalIssues: qualityReportData.summary.totalIssues || 0,
+        criticalCount: qualityReportData.summary.countsBySeverity ? qualityReportData.summary.countsBySeverity.critical || 0 : 0,
+        warningCount: qualityReportData.summary.countsBySeverity ? qualityReportData.summary.countsBySeverity.warning || 0 : 0,
+        infoCount: qualityReportData.summary.countsBySeverity ? qualityReportData.summary.countsBySeverity.info || 0 : 0,
+        pagesWithIssues: qualityReportData.summary.pagesWithIssues || 0,
+        reviewProgress: qualityReportData.summary.reviewProgress || 0,
+      };
+    }
+
     var result = {
       format: PACKAGE_FORMAT,
       formatVersion: PACKAGE_VERSION,
@@ -312,6 +336,8 @@
         totalImageSizeKB: totalImageSizeKB,
         hasTaskQueue: !!taskQueueData,
         taskCount: taskQueueData ? taskQueueData.taskCount : 0,
+        hasQualityReport: !!qualityReportData,
+        qualityReport: qualityReportSummary,
       },
       pages: pages,
       calibrationSessions: calibrationSessions,
@@ -326,6 +352,10 @@
 
     if (taskQueueData) {
       result.taskQueue = taskQueueData;
+    }
+
+    if (qualityReportData) {
+      result.qualityReport = qualityReportData;
     }
 
     if (hasRealCoords) {
@@ -1033,10 +1063,25 @@
       });
     }
 
+    var qualityReport = null;
+    if (packageData.qualityReport && typeof packageData.qualityReport === "object" && packageData.qualityReport.issues) {
+      qualityReport = JSON.parse(JSON.stringify(packageData.qualityReport));
+    }
+
     return {
       volumeId: proj.id || "",
       volumeTitle: proj.title || "",
       pages: packageData.pages.map(function (p) {
+        var pageMarkers = Array.isArray(p.markers) ? p.markers.map(function (m) {
+          if (m.review && m.review.status && REVIEW_STATUSES.indexOf(m.review.status) !== -1) {
+            m.review = {
+              status: m.review.status,
+              comment: (m.review.comment || "").trim(),
+              reviewedAt: m.review.reviewedAt || null,
+            };
+          }
+          return m;
+        }) : [];
         return {
           id: p.id,
           name: p.name || "",
@@ -1044,18 +1089,10 @@
           image: p.image || "",
           imageWidth: p.imageWidth !== undefined && p.imageWidth !== null ? Number(p.imageWidth) || undefined : undefined,
           imageHeight: p.imageHeight !== undefined && p.imageHeight !== null ? Number(p.imageHeight) || undefined : undefined,
-          markers: Array.isArray(p.markers) ? p.markers.map(function (m) {
-            if (m.review && m.review.status && REVIEW_STATUSES.indexOf(m.review.status) !== -1) {
-              m.review = {
-                status: m.review.status,
-                comment: (m.review.comment || "").trim(),
-                reviewedAt: m.review.reviewedAt || null,
-              };
-            }
-            return m;
-          }) : [],
+          markers: pageMarkers,
           createdAt: p.createdAt || now,
           updatedAt: p.updatedAt || now,
+          candidateSummary: p.candidateSummary || null,
         };
       }),
       currentPageId: packageData.pages.length > 0 ? packageData.pages[0].id : null,
@@ -1064,6 +1101,7 @@
       damageTypes: packageData.damageTypes,
       calibrationSessions: packageData.calibrationSessions || [],
       calibrationPlans: calibrationPlans,
+      qualityReport: qualityReport,
     };
   }
 

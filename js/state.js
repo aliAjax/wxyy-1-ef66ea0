@@ -1337,6 +1337,25 @@
       this._notify();
       return copy;
     },
+
+    getQualityReport() {
+      return this._state.qualityReport || null;
+    },
+
+    saveQualityReport(reportData) {
+      if (!reportData || !reportData.issues) return false;
+      this._state.qualityReport = JSON.parse(JSON.stringify(reportData));
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    clearQualityReport() {
+      this._state.qualityReport = null;
+      this._persist();
+      this._notify();
+      return true;
+    },
   };
 
   global.VolumeState = VolumeState;

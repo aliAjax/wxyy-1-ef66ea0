@@ -32,6 +32,7 @@
         <button id="reviewBtn" type="button" title="进入复核工作台">复核工作台</button>
         <button id="diffBtn" type="button" title="双人标注差异比对">🔍 差异比对</button>
         <button id="taskQueueBtn" type="button" title="离线审校任务队列">📋 任务队列</button>
+        <button id="qualityReportBtn" type="button" title="整卷质检报告" class="primary">📊 质检报告</button>
         <button id="calibrationBtn" type="button" title="跨页校准与标记迁移">📐 跨页校准</button>
         <a href="calibration.html" class="topbar-link" title="打开跨页校准专页（双页并排视图）">📐 校准专页</a>
         <button id="exportBtn" type="button" title="导出项目工作包">📦 导出</button>
@@ -677,6 +678,52 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="qualityReportModal" style="display:none;">
+    <div class="modal modal-quality-report">
+      <div class="modal-header">
+        <h2>📊 整卷质检报告</h2>
+        <button class="modal-close" id="closeQualityReportBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="qr-toolbar">
+          <button id="qrRefreshBtn" type="button" class="primary">🔄 重新计算报告</button>
+          <button id="qrExportBtn" type="button">📥 导出报告JSON</button>
+          <span class="qr-generated-at" id="qrGeneratedAt"></span>
+        </div>
+
+        <div class="qr-summary-cards" id="qrSummaryCards"></div>
+
+        <div class="qr-section">
+          <h3>📑 按问题类型分类</h3>
+          <div id="qrByType" class="qr-by-type"></div>
+        </div>
+
+        <div class="qr-section">
+          <h3>📄 按页面问题列表</h3>
+          <div class="qr-page-filter">
+            <label>筛选严重程度：</label>
+            <select id="qrSeverityFilter">
+              <option value="all">全部</option>
+              <option value="critical">仅严重</option>
+              <option value="warning">严重+警告</option>
+              <option value="info">仅提示</option>
+            </select>
+          </div>
+          <div id="qrByPage" class="qr-by-page"></div>
+        </div>
+
+        <div id="qrEmpty" class="qr-empty" style="display:none;">
+          <div class="qr-empty-icon">✅</div>
+          <p>当前没有发现任何质检问题，继续保持！</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="qr-footer-stats" id="qrFooterStats"></div>
+        <button id="closeQualityReportFooterBtn" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toastContainer" class="toast-container"></div>
 
   <script src="./js/storage.js"></script>
@@ -688,6 +735,7 @@
   <script src="./js/candidate-manager.js"></script>
   <script src="./js/calibration.js"></script>
   <script src="./js/calibration-ui.js"></script>
+  <script src="./js/quality-report.js"></script>
   <script src="./js/render.js"></script>
   <script src="./js/image-viewer.js"></script>
   <script src="./app.js"></script>
