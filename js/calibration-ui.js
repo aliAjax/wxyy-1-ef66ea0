@@ -593,6 +593,172 @@
     loadCalibration();
   }
 
+  function saveCalibrationPlan(name, description) {
+    if (!_calibrationData) return { success: false, error: "无校准数据" };
+    if (!allPointsSet()) return { success: false, error: "需先完成 4 对校准点" };
+    if (!name || !String(name).trim()) return { success: false, error: "方案名称不能为空" };
+
+    var sourcePage = State.pages.find(function (p) { return p.id === _calibrationData.sourcePageId; });
+    var targetPage = State.pages.find(function (p) { return p.id === _calibrationData.targetPageId; });
+
+    var sourceMarkerCount = sourcePage ? sourcePage.markers.length : 0;
+    var sourceMarkerTypeCounts = {};
+    if (sourcePage && sourcePage.markers) {
+      sourcePage.markers.forEach(function (m) {
+        var key = m.type || m.typeId || "未知类型";
+        sourceMarkerTypeCounts[key] = (sourceMarkerTypeCounts[key] || 0) + 1;
+      });
+    }
+
+    var planData = {
+      name: name,
+      description: description || "",
+      sourcePageId: _calibrationData.sourcePageId,
+      targetPageId: _calibrationData.targetPageId,
+      sourcePageName: sourcePage ? (sourcePage.name || sourcePage.fileName || "") : "",
+      targetPageName: targetPage ? (targetPage.name || targetPage.fileName || "") : "",
+      sourcePoints: _calibrationData.sourcePoints,
+      targetPoints: _calibrationData.targetPoints,
+      transform: _calibrationData.transform,
+      transformType: _calibrationData.transformType,
+      quality: _calibrationData.quality,
+      residual: _calibrationData.residual,
+      sourceMarkerCount: sourceMarkerCount,
+      sourceMarkerTypeCounts: sourceMarkerTypeCounts,
+    };
+
+    var plan = State.addCalibrationPlan(planData);
+    if (!plan) return { success: false, error: "保存方案失败" };
+    return { success: true, plan: plan };
+  }
+
+  function getCalibrationPlans() {
+    return State.getCalibrationPlans();
+  }
+
+  function deleteCalibrationPlan(planId) {
+    return State.removeCalibrationPlan(planId);
+  }
+
+  function duplicateCalibrationPlan(planId, newName) {
+    return State.duplicateCalibrationPlan(planId, newName);
+  }
+
+  function renameCalibrationPlan(planId, newName, newDescription) {
+    if (!newName || !String(newName).trim()) return false;
+    var updates = { name: String(newName).trim() };
+    if (newDescription !== undefined) {
+      updates.description = String(newDescription).trim();
+    }
+    return !!State.updateCalibrationPlan(planId, updates);
+  }
+
+  function previewPlanApplication(planId, sourcePageId, targetPageId) {
+    var plan = State.getCalibrationPlanById(planId);
+    if (!plan) return { success: false, error: "方案不存在" };
+
+    var sourcePage = State.pages.find(function (p) { return p.id === sourcePageId; });
+    var targetPage = State.pages.find(function (p) { return p.id === targetPageId; });
+
+    if (!sourcePage) return { success: false, error: "源页面不存在" };
+    if (!targetPage) return { success: false, error: "目标页面不存在" };
+    if (!sourcePage.markers || sourcePage.markers.length === 0) {
+      return { success: false, error: "源页面没有标记可供迁移" };
+    }
+
+    var validSrc = plan.sourcePoints.filter(function (p) { return p != null; }).length;
+    var validDst = plan.targetPoints.filter(function (p) { return p != null; }).length;
+    if (validSrc < 4 || validDst < 4) {
+      return { success: false, error: "方案校准点不完整" };
+    }
+
+    var result = Calibration.computeBestTransform(plan.sourcePoints, plan.targetPoints);
+    if (!result) return { success: false, error: "坐标变换计算失败" };
+
+    var projectedMarkers = Calibration.projectMarkers(result.transform, sourcePage.markers);
+    var inRangeMarkers = projectedMarkers.filter(function (c) {
+      return c.x >= -5 && c.x <= 105 && c.y >= -5 && c.y <= 105;
+    });
+
+    var markerTypeCounts = {};
+    inRangeMarkers.forEach(function (m) {
+      var key = m.type || m.typeId || "未知类型";
+      markerTypeCounts[key] = (markerTypeCounts[key] || 0) + 1;
+    });
+
+    var pointModeCount = inRangeMarkers.filter(function (m) { return m.mode !== "region"; }).length;
+    var regionModeCount = inRangeMarkers.length - pointModeCount;
+
+    return {
+      success: true,
+      plan: plan,
+      quality: result.quality,
+      residual: result.residual,
+      transformType: result.type,
+      validation: result.validation,
+      totalProjected: projectedMarkers.length,
+      inRangeCount: inRangeMarkers.length,
+      outOfRangeCount: projectedMarkers.length - inRangeMarkers.length,
+      pointModeCount: pointModeCount,
+      regionModeCount: regionModeCount,
+      markerTypeCounts: markerTypeCounts,
+      sourcePage: { id: sourcePage.id, name: sourcePage.name || sourcePage.fileName || "", markerCount: sourcePage.markers.length },
+      targetPage: { id: targetPage.id, name: targetPage.name || targetPage.fileName || "" },
+    };
+  }
+
+  function loadCalibrationPlan(planId, sourcePageId, targetPageId) {
+    var plan = State.getCalibrationPlanById(planId);
+    if (!plan) return { success: false, error: "方案不存在" };
+
+    _calibrationData = createDefaultCalibration();
+    _calibrationData.sourcePageId = sourcePageId || plan.sourcePageId;
+    _calibrationData.targetPageId = targetPageId || plan.targetPageId;
+    _calibrationData.sourcePoints = plan.sourcePoints ? plan.sourcePoints.slice() : [null, null, null, null];
+    _calibrationData.targetPoints = plan.targetPoints ? plan.targetPoints.slice() : [null, null, null, null];
+    _currentStep = 2;
+    saveCalibration();
+    _notify();
+
+    return {
+      success: true,
+      sourcePageId: _calibrationData.sourcePageId,
+      targetPageId: _calibrationData.targetPageId,
+    };
+  }
+
+  function applyCalibrationPlan(planId, options) {
+    options = options || {};
+    var sourcePageId = options.sourcePageId;
+    var targetPageId = options.targetPageId;
+
+    var loadResult = loadCalibrationPlan(planId, sourcePageId, targetPageId);
+    if (!loadResult.success) return loadResult;
+
+    var computeResult = computeAndGenerateCandidates();
+    if (!computeResult.success) return computeResult;
+
+    if (typeof State.recordPlanUsage === "function") {
+      State.recordPlanUsage(planId);
+    }
+
+    return {
+      success: true,
+      count: computeResult.count,
+      quality: computeResult.quality,
+      residual: computeResult.residual,
+      transformType: computeResult.transformType,
+      fallback: computeResult.fallback || false,
+      validation: computeResult.validation,
+      planId: planId,
+    };
+  }
+
+  function getPlanQualityBadgeClass(quality) {
+    if (!quality || !quality.level) return "quality-bad";
+    return "quality-" + quality.level;
+  }
+
   var CalibrationUI = {
     init: init,
     getCalibration: getCalibration,
@@ -636,7 +802,16 @@
     saveSession: saveSession,
     restoreSession: restoreSession,
     deleteSession: deleteSession,
-    autoSuggestPages: autoSuggestPages
+    autoSuggestPages: autoSuggestPages,
+    saveCalibrationPlan: saveCalibrationPlan,
+    getCalibrationPlans: getCalibrationPlans,
+    deleteCalibrationPlan: deleteCalibrationPlan,
+    duplicateCalibrationPlan: duplicateCalibrationPlan,
+    renameCalibrationPlan: renameCalibrationPlan,
+    previewPlanApplication: previewPlanApplication,
+    loadCalibrationPlan: loadCalibrationPlan,
+    applyCalibrationPlan: applyCalibrationPlan,
+    getPlanQualityBadgeClass: getPlanQualityBadgeClass,
   };
 
   global.CalibrationUI = CalibrationUI;

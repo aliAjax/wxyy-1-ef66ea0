@@ -1035,6 +1035,133 @@
       const marker = page.markers.find((m) => m.id === markerId);
       return marker ? Boolean(marker.migrated) : false;
     },
+
+    getCalibrationPlans() {
+      if (!this._state.calibrationPlans) {
+        this._state.calibrationPlans = [];
+      }
+      return this._state.calibrationPlans;
+    },
+
+    getCalibrationPlanById(planId) {
+      if (!this._state.calibrationPlans) return null;
+      return this._state.calibrationPlans.find((p) => p.id === planId) || null;
+    },
+
+    addCalibrationPlan(planData) {
+      if (!planData || !planData.name) return null;
+      if (!this._state.calibrationPlans) {
+        this._state.calibrationPlans = [];
+      }
+      const now = new Date().toISOString();
+      const plan = {
+        id: "plan-" + crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        name: String(planData.name).trim(),
+        description: planData.description ? String(planData.description).trim() : "",
+        sourcePageId: planData.sourcePageId || null,
+        targetPageId: planData.targetPageId || null,
+        sourcePageName: planData.sourcePageName || "",
+        targetPageName: planData.targetPageName || "",
+        sourcePoints: Array.isArray(planData.sourcePoints) ? planData.sourcePoints.slice() : [null, null, null, null],
+        targetPoints: Array.isArray(planData.targetPoints) ? planData.targetPoints.slice() : [null, null, null, null],
+        transform: planData.transform || null,
+        transformType: planData.transformType || null,
+        quality: planData.quality || null,
+        residual: planData.residual || null,
+        sourceMarkerCount: Number(planData.sourceMarkerCount) || 0,
+        sourceMarkerTypeCounts: planData.sourceMarkerTypeCounts || {},
+        useCount: 0,
+        lastUsedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this._state.calibrationPlans.unshift(plan);
+      this._persist();
+      this._notify();
+      return plan;
+    },
+
+    updateCalibrationPlan(planId, updates) {
+      if (!this._state.calibrationPlans) return null;
+      const plan = this._state.calibrationPlans.find((p) => p.id === planId);
+      if (!plan) return null;
+      Object.assign(plan, updates);
+      plan.updatedAt = new Date().toISOString();
+      this._persist();
+      this._notify();
+      return plan;
+    },
+
+    removeCalibrationPlan(planId) {
+      if (!this._state.calibrationPlans) return false;
+      const before = this._state.calibrationPlans.length;
+      this._state.calibrationPlans = this._state.calibrationPlans.filter(
+        (p) => p.id !== planId
+      );
+      if (this._state.calibrationPlans.length === before) return false;
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    recordPlanUsage(planId) {
+      if (!this._state.calibrationPlans) return null;
+      const plan = this._state.calibrationPlans.find((p) => p.id === planId);
+      if (!plan) return null;
+      plan.useCount = (plan.useCount || 0) + 1;
+      plan.lastUsedAt = new Date().toISOString();
+      this._persist();
+      return plan;
+    },
+
+    getCalibrationPlanCount() {
+      if (!this._state.calibrationPlans) return 0;
+      return this._state.calibrationPlans.length;
+    },
+
+    getPlansForAdjacentPages(sourcePageId, targetPageId) {
+      if (!this._state.calibrationPlans) return [];
+      return this._state.calibrationPlans.filter((p) => {
+        if (sourcePageId && p.sourcePageId === sourcePageId) return true;
+        if (targetPageId && p.targetPageId === targetPageId) return true;
+        if (!sourcePageId && !targetPageId) return true;
+        return false;
+      });
+    },
+
+    duplicateCalibrationPlan(planId, newName) {
+      const plan = this.getCalibrationPlanById(planId);
+      if (!plan) return null;
+      const now = new Date().toISOString();
+      const copy = {
+        id: "plan-" + crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+        name: newName ? String(newName).trim() : (plan.name + " (副本)"),
+        description: plan.description || "",
+        sourcePageId: null,
+        targetPageId: null,
+        sourcePageName: plan.sourcePageName || "",
+        targetPageName: plan.targetPageName || "",
+        sourcePoints: plan.sourcePoints ? plan.sourcePoints.slice() : [null, null, null, null],
+        targetPoints: plan.targetPoints ? plan.targetPoints.slice() : [null, null, null, null],
+        transform: plan.transform || null,
+        transformType: plan.transformType || null,
+        quality: plan.quality || null,
+        residual: plan.residual || null,
+        sourceMarkerCount: plan.sourceMarkerCount || 0,
+        sourceMarkerTypeCounts: plan.sourceMarkerTypeCounts || {},
+        useCount: 0,
+        lastUsedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (!this._state.calibrationPlans) {
+        this._state.calibrationPlans = [];
+      }
+      this._state.calibrationPlans.unshift(copy);
+      this._persist();
+      this._notify();
+      return copy;
+    },
   };
 
   global.VolumeState = VolumeState;

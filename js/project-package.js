@@ -230,6 +230,35 @@
       });
     }
 
+    var calibrationPlans = [];
+    if (state.calibrationPlans && Array.isArray(state.calibrationPlans)) {
+      calibrationPlans = state.calibrationPlans.filter(function (p) {
+        return p && p.id && p.name && Array.isArray(p.sourcePoints) && Array.isArray(p.targetPoints);
+      }).map(function (p) {
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          sourcePageId: p.sourcePageId || null,
+          targetPageId: p.targetPageId || null,
+          sourcePageName: p.sourcePageName || "",
+          targetPageName: p.targetPageName || "",
+          sourcePoints: Array.isArray(p.sourcePoints) ? p.sourcePoints.slice() : [null, null, null, null],
+          targetPoints: Array.isArray(p.targetPoints) ? p.targetPoints.slice() : [null, null, null, null],
+          transform: p.transform || null,
+          transformType: p.transformType || null,
+          quality: p.quality || null,
+          residual: p.residual || null,
+          sourceMarkerCount: Number(p.sourceMarkerCount) || 0,
+          sourceMarkerTypeCounts: p.sourceMarkerTypeCounts || {},
+          useCount: Number(p.useCount) || 0,
+          lastUsedAt: p.lastUsedAt || null,
+          createdAt: p.createdAt || now,
+          updatedAt: p.updatedAt || now,
+        };
+      });
+    }
+
     var hasImages = pages.some(function (p) { return p.image && p.image.length > 0; });
 
     var imageRefCount = pages.filter(function (p) { return !p.imageIncluded && p.imageRef; }).length;
@@ -277,6 +306,8 @@
         hasMigratedMarkers: hasMigratedMarkers,
         hasCalibrationSessions: calibrationSessions.length > 0,
         calibrationSessionCount: calibrationSessions.length,
+        hasCalibrationPlans: calibrationPlans.length > 0,
+        calibrationPlanCount: calibrationPlans.length,
         imageRefCount: imageRefCount,
         totalImageSizeKB: totalImageSizeKB,
         hasTaskQueue: !!taskQueueData,
@@ -284,6 +315,7 @@
       },
       pages: pages,
       calibrationSessions: calibrationSessions,
+      calibrationPlans: calibrationPlans,
       _meta: {
         exportedBy: "wxyy-archive-tool",
         exportOptions: {
@@ -960,6 +992,35 @@
     var now = new Date().toISOString();
     var proj = packageData.project || {};
 
+    var calibrationPlans = [];
+    if (packageData.calibrationPlans && Array.isArray(packageData.calibrationPlans)) {
+      calibrationPlans = packageData.calibrationPlans.filter(function (p) {
+        return p && p.id && p.name && Array.isArray(p.sourcePoints) && Array.isArray(p.targetPoints);
+      }).map(function (p) {
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          sourcePageId: p.sourcePageId || null,
+          targetPageId: p.targetPageId || null,
+          sourcePageName: p.sourcePageName || "",
+          targetPageName: p.targetPageName || "",
+          sourcePoints: Array.isArray(p.sourcePoints) ? p.sourcePoints.slice() : [null, null, null, null],
+          targetPoints: Array.isArray(p.targetPoints) ? p.targetPoints.slice() : [null, null, null, null],
+          transform: p.transform || null,
+          transformType: p.transformType || null,
+          quality: p.quality || null,
+          residual: p.residual || null,
+          sourceMarkerCount: Number(p.sourceMarkerCount) || 0,
+          sourceMarkerTypeCounts: p.sourceMarkerTypeCounts || {},
+          useCount: Number(p.useCount) || 0,
+          lastUsedAt: p.lastUsedAt || null,
+          createdAt: p.createdAt || now,
+          updatedAt: p.updatedAt || now,
+        };
+      });
+    }
+
     return {
       volumeId: proj.id || "",
       volumeTitle: proj.title || "",
@@ -990,6 +1051,7 @@
       updatedAt: now,
       damageTypes: packageData.damageTypes,
       calibrationSessions: packageData.calibrationSessions || [],
+      calibrationPlans: calibrationPlans,
     };
   }
 

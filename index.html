@@ -417,9 +417,85 @@
           </div>
           <div id="migrationList" class="migration-list"></div>
         </div>
+
+        <div class="calib-plan-actions" id="calibPlanActions">
+          <button id="calibSavePlanBtn" type="button" class="primary" disabled>💾 保存为校准方案</button>
+        </div>
+
+        <section class="calib-plans-section" id="calibPlansSection">
+          <div class="calib-section-header">
+            <h2>📚 校准方案库</h2>
+            <span class="calib-plans-count" id="calibPlansCount">0 个方案</span>
+          </div>
+          <p class="calib-plans-hint">已保存的校准方案可在本卷册其他相邻页面快速复用。</p>
+          <div id="calibPlansList" class="calib-plans-list">
+            <div class="calib-plans-empty" id="calibPlansEmpty">暂无保存的校准方案。完成 4 对校准点后可保存方案。</div>
+          </div>
+        </section>
       </div>
       <div class="modal-footer">
         <button id="closeCalibrationFooterBtn" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="savePlanModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>💾 保存校准方案</h2>
+        <button class="modal-close" id="closeSavePlanBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="savePlanPreview" class="plan-preview-block"></div>
+        <label>
+          <span>方案名称 *</span>
+          <input type="text" id="planNameInput" placeholder="如：第1-2页跨页校准" maxlength="80" />
+        </label>
+        <label>
+          <span>方案说明（可选）</span>
+          <textarea id="planDescInput" placeholder="记录方案的使用场景、特征点位置说明等…" rows="3" maxlength="300"></textarea>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelSavePlanBtn" type="button">取消</button>
+        <button id="confirmSavePlanBtn" type="button" class="primary">保存方案</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="planPreviewModal" style="display:none;">
+    <div class="modal modal-plan-preview">
+      <div class="modal-header">
+        <h2>🔍 方案应用预览</h2>
+        <button class="modal-close" id="closePlanPreviewBtn" type="button">×</button>
+      </div>
+      <div class="modal-body" id="planPreviewBody"></div>
+      <div class="modal-footer">
+        <button id="cancelApplyPlanBtn" type="button">取消</button>
+        <button id="confirmApplyPlanBtn" type="button" class="primary">✓ 应用此方案</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="renamePlanModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>✎ 重命名方案</h2>
+        <button class="modal-close" id="closeRenamePlanBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <label>
+          <span>方案名称 *</span>
+          <input type="text" id="renamePlanNameInput" placeholder="新方案名称" maxlength="80" />
+        </label>
+        <label>
+          <span>方案说明（可选）</span>
+          <textarea id="renamePlanDescInput" rows="3" maxlength="300"></textarea>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelRenamePlanBtn" type="button">取消</button>
+        <button id="confirmRenamePlanBtn" type="button" class="primary">保存修改</button>
       </div>
     </div>
   </div>

@@ -53,6 +53,32 @@
   const migrRejectAllBtn = document.getElementById("migrRejectAllBtn");
   const migrApplyBtn = document.getElementById("migrApplyBtn");
 
+  let _appPendingPlanId = null;
+  let _appRenamePlanId = null;
+
+  const calibSavePlanBtn = document.getElementById("calibSavePlanBtn");
+  const savePlanModal = document.getElementById("savePlanModal");
+  const closeSavePlanBtn = document.getElementById("closeSavePlanBtn");
+  const cancelSavePlanBtn = document.getElementById("cancelSavePlanBtn");
+  const confirmSavePlanBtn = document.getElementById("confirmSavePlanBtn");
+  const planNameInput = document.getElementById("planNameInput");
+  const planDescInput = document.getElementById("planDescInput");
+  const savePlanPreview = document.getElementById("savePlanPreview");
+  const calibPlansList = document.getElementById("calibPlansList");
+  const calibPlansEmpty = document.getElementById("calibPlansEmpty");
+  const calibPlansCount = document.getElementById("calibPlansCount");
+  const planPreviewModal = document.getElementById("planPreviewModal");
+  const planPreviewBody = document.getElementById("planPreviewBody");
+  const closePlanPreviewBtn = document.getElementById("closePlanPreviewBtn");
+  const cancelApplyPlanBtn = document.getElementById("cancelApplyPlanBtn");
+  const confirmApplyPlanBtn = document.getElementById("confirmApplyPlanBtn");
+  const renamePlanModal = document.getElementById("renamePlanModal");
+  const closeRenamePlanBtn = document.getElementById("closeRenamePlanBtn");
+  const cancelRenamePlanBtn = document.getElementById("cancelRenamePlanBtn");
+  const confirmRenamePlanBtn = document.getElementById("confirmRenamePlanBtn");
+  const renamePlanNameInput = document.getElementById("renamePlanNameInput");
+  const renamePlanDescInput = document.getElementById("renamePlanDescInput");
+
   const importModal = document.getElementById("importModal");
   const importError = document.getElementById("importError");
   const importWarning = document.getElementById("importWarning");
@@ -242,6 +268,9 @@
       updateCalibrationPointDisplay();
       Render.refresh();
       showToast("已设置校准点 " + (picking.side === "source" ? "S" : "T") + (picking.index + 1), "success");
+      if (calibrationModal && calibrationModal.style.display !== "none") {
+        updateSavePlanBtnState();
+      }
       return;
     }
 
@@ -1530,6 +1559,8 @@
     populateCalibPageSelects();
     updateCalibrationPointDisplay();
     updateMigrationUI();
+    renderCalibPlansList();
+    updateSavePlanBtnState();
     calibrationModal.style.display = "flex";
   }
 
@@ -1645,6 +1676,415 @@
     updateCalibrationPointDisplay();
     Render.refresh();
     showToast("校准数据已重置", "info");
+    renderCalibPlansList();
+    updateSavePlanBtnState();
+  }
+
+  function appFormatDateTime(isoStr) {
+    if (!isoStr) return "";
+    try {
+      var d = new Date(isoStr);
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" +
+        String(d.getMinutes()).padStart(2, "0");
+    } catch (e) {
+      return isoStr.slice(0, 16).replace("T", " ");
+    }
+  }
+
+  function renderCalibPlansList() {
+    if (!calibPlansList || !calibPlansEmpty || !calibPlansCount) return;
+    var plans = CalibrationUI.getCalibrationPlans();
+    var count = plans ? plans.length : 0;
+    calibPlansCount.textContent = count + " 个方案";
+
+    if (count === 0) {
+      calibPlansEmpty.style.display = "block";
+      calibPlansList.innerHTML = "";
+      calibPlansList.appendChild(calibPlansEmpty);
+      return;
+    }
+
+    calibPlansEmpty.style.display = "none";
+    var html = "";
+    var calData = CalibrationUI.getCalibration();
+    var currentSrcId = calData ? calData.sourcePageId : null;
+    var currentTgtId = calData ? calData.targetPageId : null;
+
+    for (var i = 0; i < plans.length; i++) {
+      var p = plans[i];
+      var q = p.quality || {};
+      var qualityColor = q.level === "excellent" ? "#4caf50" : q.level === "good" ? "#8bc34a" :
+        q.level === "acceptable" ? "#ff9800" : q.level === "poor" ? "#ff5722" : "#f44336";
+      var qualityLabel = q.label || "未评估";
+      var typeCountsHtml = "";
+      if (p.sourceMarkerTypeCounts && Object.keys(p.sourceMarkerTypeCounts).length > 0) {
+        var parts = [];
+        Object.keys(p.sourceMarkerTypeCounts).forEach(function (k) {
+          parts.push(escapeHtmlSimple(k) + "×" + p.sourceMarkerTypeCounts[k]);
+        });
+        typeCountsHtml = '<span class="plan-type-counts">' + parts.join("，") + '</span>';
+      }
+
+      var pagePairMatch = (p.sourcePageId && p.sourcePageId === currentSrcId && p.targetPageId && p.targetPageId === currentTgtId) ?
+        '<span class="plan-match-badge">当前页对</span>' : '';
+
+      html += '<div class="calib-plan-card" data-plan-id="' + escapeHtmlSimple(p.id) + '">' +
+        '<div class="plan-card-header">' +
+        '<div class="plan-card-title">' +
+        '<span class="plan-name">' + escapeHtmlSimple(p.name) + '</span>' +
+        pagePairMatch +
+        (q.label ? '<span class="plan-quality-badge" style="background:' + qualityColor + ';">' + escapeHtmlSimple(qualityLabel) + '</span>' : '') +
+        '</div>' +
+        '<div class="plan-card-actions">' +
+        '<button class="plan-action-btn" data-plan-action="apply" data-plan-id="' + escapeHtmlSimple(p.id) + '" title="应用方案">应用</button>' +
+        '<button class="plan-action-btn" data-plan-action="copy" data-plan-id="' + escapeHtmlSimple(p.id) + '" title="复制方案">复制</button>' +
+        '<button class="plan-action-btn" data-plan-action="rename" data-plan-id="' + escapeHtmlSimple(p.id) + '" title="重命名">✎</button>' +
+        '<button class="plan-action-btn danger" data-plan-action="delete" data-plan-id="' + escapeHtmlSimple(p.id) + '" title="删除方案">🗑</button>' +
+        '</div>' +
+        '</div>' +
+        (p.description ? '<div class="plan-desc">' + escapeHtmlSimple(p.description) + '</div>' : '') +
+        '<div class="plan-meta">' +
+        '<span class="plan-meta-item">📄 ' +
+        escapeHtmlSimple(p.sourcePageName || (p.sourcePageId ? "源页" : "—")) +
+        ' → ' +
+        escapeHtmlSimple(p.targetPageName || (p.targetPageId ? "目标页" : "—")) +
+        '</span>' +
+        '<span class="plan-meta-item">📍 标记数: ' + (p.sourceMarkerCount || 0) + '</span>' +
+        (p.useCount ? '<span class="plan-meta-item">🔁 复用: ' + p.useCount + '次</span>' : '') +
+        (p.lastUsedAt ? '<span class="plan-meta-item">⏱ ' + appFormatDateTime(p.lastUsedAt) + '</span>' : '') +
+        (p.residual && p.residual.rmse ? '<span class="plan-meta-item">📊 RMSE: ' + p.residual.rmse + '%</span>' : '') +
+        '</div>' +
+        (typeCountsHtml ? '<div class="plan-type-info">' + typeCountsHtml + '</div>' : '') +
+        '<div class="plan-footer">' +
+        '<span class="plan-date">创建于 ' + appFormatDateTime(p.createdAt) + '</span>' +
+        '</div>' +
+        '</div>';
+    }
+    calibPlansList.innerHTML = html;
+  }
+
+  function updateSavePlanBtnState() {
+    if (calibSavePlanBtn) {
+      calibSavePlanBtn.disabled = !CalibrationUI.allPointsSet();
+    }
+  }
+
+  function openSavePlanModal() {
+    var calData = CalibrationUI.getCalibration();
+    if (!calData) {
+      showToast("无校准数据", "error");
+      return;
+    }
+    if (!CalibrationUI.allPointsSet()) {
+      showToast("需先完成 4 对校准点才能保存方案", "warning");
+      return;
+    }
+
+    var srcPage = State.pages.find(function (p) { return p.id === calData.sourcePageId; });
+    var tgtPage = State.pages.find(function (p) { return p.id === calData.targetPageId; });
+    var srcName = srcPage ? (srcPage.name || srcPage.fileName || "源页") : "源页";
+    var tgtName = tgtPage ? (tgtPage.name || tgtPage.fileName || "目标页") : "目标页";
+    var defaultName = srcName + " → " + tgtName + " 校准方案";
+
+    if (planNameInput) planNameInput.value = defaultName;
+    if (planDescInput) planDescInput.value = "";
+
+    var previewHtml = "";
+    if (calData.quality && calData.quality.label) {
+      previewHtml = '<div class="plan-preview-quality">' +
+        '<span class="plan-preview-label">当前校准质量：</span>' +
+        '<span class="plan-preview-quality-badge" style="background:' +
+        (calData.quality.level === "excellent" ? "#4caf50" : calData.quality.level === "good" ? "#8bc34a" :
+          calData.quality.level === "acceptable" ? "#ff9800" : "#f44336") + ';">' +
+        escapeHtmlSimple(calData.quality.label) + '（评分 ' + calData.quality.score + '）</span>' +
+        '</div>';
+    }
+    if (srcPage && srcPage.markers) {
+      previewHtml += '<div class="plan-preview-counts">' +
+        '<span>源页标记：' + srcPage.markers.length + ' 个</span>' +
+        '<span>校准点：4 对</span>' +
+        '</div>';
+    }
+    if (savePlanPreview) savePlanPreview.innerHTML = previewHtml;
+
+    if (savePlanModal) savePlanModal.style.display = "flex";
+    if (planNameInput) setTimeout(function () { planNameInput.focus(); planNameInput.select(); }, 100);
+  }
+
+  function appCloseSavePlanModal() {
+    if (savePlanModal) savePlanModal.style.display = "none";
+  }
+
+  function appOnConfirmSavePlan() {
+    var name = planNameInput ? planNameInput.value.trim() : "";
+    var desc = planDescInput ? planDescInput.value.trim() : "";
+    if (!name) {
+      showToast("请输入方案名称", "warning");
+      if (planNameInput) planNameInput.focus();
+      return;
+    }
+    var result = CalibrationUI.saveCalibrationPlan(name, desc);
+    if (result.success) {
+      showToast("方案「" + name + "」保存成功", "success");
+      appCloseSavePlanModal();
+      renderCalibPlansList();
+    } else {
+      showToast(result.error || "保存方案失败", "error");
+    }
+  }
+
+  function appClosePlanPreviewModal() {
+    if (planPreviewModal) planPreviewModal.style.display = "none";
+    _appPendingPlanId = null;
+  }
+
+  function appOpenPlanPreviewModal(planId) {
+    var calData = CalibrationUI.getCalibration();
+    var srcId = (calData && calData.sourcePageId) || null;
+    var tgtId = (calData && calData.targetPageId) || null;
+    if (!srcId || !tgtId) {
+      showToast("请先选择源页面和目标页面", "warning");
+      return;
+    }
+
+    var preview = CalibrationUI.previewPlanApplication(planId, srcId, tgtId);
+    if (!preview.success) {
+      showToast(preview.error || "预览方案失败", "error");
+      return;
+    }
+
+    var q = preview.quality || {};
+    var r = preview.residual || {};
+    var isLowQuality = q.level === "poor" || q.level === "bad";
+    var qualityColor = q.level === "excellent" ? "#4caf50" : q.level === "good" ? "#8bc34a" :
+      q.level === "acceptable" ? "#ff9800" : q.level === "poor" ? "#ff5722" : "#f44336";
+
+    var typeCountsHtml = "";
+    if (preview.markerTypeCounts && Object.keys(preview.markerTypeCounts).length > 0) {
+      typeCountsHtml = '<div class="preview-type-counts"><h4>按类型分布</h4><ul>';
+      Object.keys(preview.markerTypeCounts).forEach(function (k) {
+        typeCountsHtml += '<li><span class="type-name">' + escapeHtmlSimple(k) + '</span>' +
+          '<span class="type-num">' + preview.markerTypeCounts[k] + ' 个</span></li>';
+      });
+      typeCountsHtml += '</ul></div>';
+    }
+
+    var warningBlock = "";
+    if (isLowQuality) {
+      warningBlock = '<div class="preview-warning">' +
+        '<div class="preview-warning-icon">⚠</div>' +
+        '<div class="preview-warning-text">' +
+        '<h4>校准质量较低</h4>' +
+        '<p>当前方案在此页对上的残差较大，迁移后的标记位置偏差可能超出可接受范围。建议先调整校准点后再应用，或应用后逐个人工核对。</p>' +
+        '</div></div>';
+    } else if (preview.outOfRangeCount > 0) {
+      warningBlock = '<div class="preview-warning info">' +
+        '<div class="preview-warning-icon">ℹ</div>' +
+        '<div class="preview-warning-text">' +
+        '<h4>部分标记超出范围</h4>' +
+        '<p>有 ' + preview.outOfRangeCount + ' 个标记投影后超出目标页面，将不会被迁移。</p>' +
+        '</div></div>';
+    }
+
+    if (preview.validation && preview.validation.issues && preview.validation.issues.length > 0) {
+      warningBlock += '<div class="preview-warnings-list"><h4>校准点提示</h4><ul>';
+      preview.validation.issues.forEach(function (issue) {
+        warningBlock += '<li>⚠ ' + escapeHtmlSimple(issue) + '</li>';
+      });
+      warningBlock += '</ul></div>';
+    }
+
+    var html = '<div class="plan-preview-content">' +
+      warningBlock +
+      '<div class="preview-section quality-section">' +
+      '<h3>🎯 变换残差质量</h3>' +
+      '<div class="quality-score-box" style="border-color:' + qualityColor + ';">' +
+      '<div class="quality-score-main" style="color:' + qualityColor + ';">' + (q.score || "?") + '分</div>' +
+      '<div class="quality-score-label" style="background:' + qualityColor + ';">' + escapeHtmlSimple(q.label || "未知") + '</div>' +
+      '</div>' +
+      '<div class="quality-metrics">' +
+      (r.rmse !== undefined ? '<div class="metric-item"><span class="metric-label">RMSE (均方根误差)</span><span class="metric-value">' + r.rmse + '%</span></div>' : '') +
+      (r.maxError !== undefined ? '<div class="metric-item"><span class="metric-label">最大单点误差</span><span class="metric-value">' + r.maxError + '%</span></div>' : '') +
+      (r.pointCount !== undefined ? '<div class="metric-item"><span class="metric-label">校准点数</span><span class="metric-value">' + r.pointCount + '</span></div>' : '') +
+      '<div class="metric-item"><span class="metric-label">变换类型</span><span class="metric-value">' + (preview.transformType === "homography" ? "单应性变换（透视）" : "仿射变换") + (preview.fallback ? "（回退）" : "") + '</span></div>' +
+      '</div>' +
+      '</div>' +
+      '<div class="preview-section markers-section">' +
+      '<h3>📌 将迁移的标记数量</h3>' +
+      '<div class="marker-count-grid">' +
+      '<div class="marker-count-item main"><div class="count-num">' + preview.inRangeCount + '</div><div class="count-label">可迁移</div></div>' +
+      '<div class="marker-count-item"><div class="count-num">' + preview.totalProjected + '</div><div class="count-label">总计投影</div></div>' +
+      '<div class="marker-count-item"><div class="count-num">' + preview.outOfRangeCount + '</div><div class="count-label">超出范围</div></div>' +
+      '<div class="marker-count-item"><div class="count-num">' + preview.pointModeCount + '</div><div class="count-label">点标记</div></div>' +
+      '<div class="marker-count-item"><div class="count-num">' + preview.regionModeCount + '</div><div class="count-label">区域标注</div></div>' +
+      '</div>' +
+      typeCountsHtml +
+      '</div>' +
+      '<div class="preview-section page-pair-section">' +
+      '<h3>📄 目标页对</h3>' +
+      '<div class="page-pair-info">' +
+      '<div class="page-pair-item"><span class="page-label">源页面</span><span class="page-name">' + escapeHtmlSimple(preview.sourcePage.name) + '</span><span class="page-count">(' + preview.sourcePage.markerCount + ' 个标记)</span></div>' +
+      '<div class="page-pair-arrow">➜</div>' +
+      '<div class="page-pair-item"><span class="page-label">目标页面</span><span class="page-name">' + escapeHtmlSimple(preview.targetPage.name) + '</span></div>' +
+      '</div>' +
+      '</div>' +
+      (isLowQuality ?
+        '<div class="preview-confirm-checkbox">' +
+        '<label><input type="checkbox" id="lowQualityConfirm" /> 我已了解低质量风险，仍要应用此方案</label>' +
+        '</div>' : '') +
+      '</div>';
+
+    planPreviewBody.innerHTML = html;
+    _appPendingPlanId = planId;
+
+    if (confirmApplyPlanBtn) {
+      if (isLowQuality) {
+        confirmApplyPlanBtn.disabled = true;
+        setTimeout(function () {
+          var cb = document.getElementById("lowQualityConfirm");
+          if (cb) {
+            cb.addEventListener("change", function () {
+              confirmApplyPlanBtn.disabled = !cb.checked;
+            });
+          }
+        }, 50);
+      } else {
+        confirmApplyPlanBtn.disabled = false;
+      }
+    }
+
+    planPreviewModal.style.display = "flex";
+  }
+
+  function appOnConfirmApplyPlan() {
+    if (!_appPendingPlanId) {
+      appClosePlanPreviewModal();
+      return;
+    }
+
+    var calData = CalibrationUI.getCalibration();
+    var srcId = (calData && calData.sourcePageId) || null;
+    var tgtId = (calData && calData.targetPageId) || null;
+
+    var result = CalibrationUI.applyCalibrationPlan(_appPendingPlanId, {
+      sourcePageId: srcId,
+      targetPageId: tgtId,
+    });
+
+    appClosePlanPreviewModal();
+
+    if (result.success) {
+      showToast("方案应用成功，生成 " + result.count + " 个迁移候选" + (result.fallback ? "（回退仿射）" : ""), "success");
+      calibResult.textContent = "方案应用成功！生成了 " + result.count + " 个迁移候选标记，请逐条确认。";
+      calibResult.className = "calib-result success";
+      calibResult.style.display = "block";
+      calibMigrationSection.style.display = "block";
+      updateCalibrationPointDisplay();
+      updateMigrationUI();
+      Render.refresh();
+      renderCalibPlansList();
+    } else {
+      showToast(result.error || "应用方案失败", "error");
+    }
+  }
+
+  function appOnCopyPlan(planId) {
+    var plan = State.getCalibrationPlanById(planId);
+    if (!plan) {
+      showToast("方案不存在", "error");
+      return;
+    }
+    var newName = prompt("复制方案，请输入新方案名称：", plan.name + " (副本)");
+    if (newName === null) return;
+    newName = newName.trim();
+    if (!newName) {
+      showToast("名称不能为空", "warning");
+      return;
+    }
+    var result = CalibrationUI.duplicateCalibrationPlan(planId, newName);
+    if (result) {
+      showToast("方案已复制为「" + newName + "」", "success");
+      renderCalibPlansList();
+    } else {
+      showToast("复制方案失败", "error");
+    }
+  }
+
+  function appOpenRenamePlanModal(planId) {
+    var plan = State.getCalibrationPlanById(planId);
+    if (!plan) {
+      showToast("方案不存在", "error");
+      return;
+    }
+    _appRenamePlanId = planId;
+    if (renamePlanNameInput) renamePlanNameInput.value = plan.name || "";
+    if (renamePlanDescInput) renamePlanDescInput.value = plan.description || "";
+    if (renamePlanModal) {
+      renamePlanModal.style.display = "flex";
+      setTimeout(function () { renamePlanNameInput.focus(); renamePlanNameInput.select(); }, 100);
+    }
+  }
+
+  function appCloseRenamePlanModal() {
+    if (renamePlanModal) renamePlanModal.style.display = "none";
+    _appRenamePlanId = null;
+  }
+
+  function appOnConfirmRenamePlan() {
+    if (!_appRenamePlanId) { appCloseRenamePlanModal(); return; }
+    var newName = renamePlanNameInput ? renamePlanNameInput.value.trim() : "";
+    var newDesc = renamePlanDescInput ? renamePlanDescInput.value.trim() : "";
+    if (!newName) {
+      showToast("方案名称不能为空", "warning");
+      return;
+    }
+    var ok = CalibrationUI.renameCalibrationPlan(_appRenamePlanId, newName, newDesc);
+    if (ok) {
+      showToast("方案已更新", "success");
+      appCloseRenamePlanModal();
+      renderCalibPlansList();
+    } else {
+      showToast("更新方案失败", "error");
+    }
+  }
+
+  function appOnDeletePlan(planId) {
+    var plan = State.getCalibrationPlanById(planId);
+    if (!plan) return;
+    if (!confirm("确认删除校准方案「" + plan.name + "」？删除后不可恢复。")) return;
+    var ok = CalibrationUI.deleteCalibrationPlan(planId);
+    if (ok) {
+      showToast("方案已删除", "info");
+      renderCalibPlansList();
+    } else {
+      showToast("删除方案失败", "error");
+    }
+  }
+
+  function appOnPlanCardAction(e) {
+    var btn = e.target.closest("[data-plan-action]");
+    if (!btn) return;
+    var action = btn.dataset.planAction;
+    var planId = btn.dataset.planId;
+    if (!planId) return;
+
+    e.stopPropagation();
+
+    switch (action) {
+      case "apply":
+        appOpenPlanPreviewModal(planId);
+        break;
+      case "copy":
+        appOnCopyPlan(planId);
+        break;
+      case "rename":
+        appOpenRenamePlanModal(planId);
+        break;
+      case "delete":
+        appOnDeletePlan(planId);
+        break;
+    }
   }
 
   function updateMigrationUI() {
@@ -2515,6 +2955,56 @@
     if (migrApplyBtn) {
       migrApplyBtn.addEventListener("click", handleMigrApply);
     }
+
+    if (calibSavePlanBtn) {
+      calibSavePlanBtn.addEventListener("click", openSavePlanModal);
+    }
+    if (closeSavePlanBtn) {
+      closeSavePlanBtn.addEventListener("click", appCloseSavePlanModal);
+    }
+    if (cancelSavePlanBtn) {
+      cancelSavePlanBtn.addEventListener("click", appCloseSavePlanModal);
+    }
+    if (confirmSavePlanBtn) {
+      confirmSavePlanBtn.addEventListener("click", appOnConfirmSavePlan);
+    }
+    if (savePlanModal) {
+      savePlanModal.addEventListener("click", function (e) {
+        if (e.target === savePlanModal) appCloseSavePlanModal();
+      });
+    }
+    if (calibPlansList) {
+      calibPlansList.addEventListener("click", appOnPlanCardAction);
+    }
+    if (closePlanPreviewBtn) {
+      closePlanPreviewBtn.addEventListener("click", appClosePlanPreviewModal);
+    }
+    if (cancelApplyPlanBtn) {
+      cancelApplyPlanBtn.addEventListener("click", appClosePlanPreviewModal);
+    }
+    if (planPreviewModal) {
+      planPreviewModal.addEventListener("click", function (e) {
+        if (e.target === planPreviewModal) appClosePlanPreviewModal();
+      });
+    }
+    if (confirmApplyPlanBtn) {
+      confirmApplyPlanBtn.addEventListener("click", appOnConfirmApplyPlan);
+    }
+    if (closeRenamePlanBtn) {
+      closeRenamePlanBtn.addEventListener("click", appCloseRenamePlanModal);
+    }
+    if (cancelRenamePlanBtn) {
+      cancelRenamePlanBtn.addEventListener("click", appCloseRenamePlanModal);
+    }
+    if (confirmRenamePlanBtn) {
+      confirmRenamePlanBtn.addEventListener("click", appOnConfirmRenamePlan);
+    }
+    if (renamePlanModal) {
+      renamePlanModal.addEventListener("click", function (e) {
+        if (e.target === renamePlanModal) appCloseRenamePlanModal();
+      });
+    }
+
     if (migrationList) {
       migrationList.addEventListener("click", function (e) {
         var actionBtn = e.target.closest("[data-migr-action]");

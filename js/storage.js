@@ -31,6 +31,8 @@
     createdAt: null,
     updatedAt: null,
     damageTypes: cloneValue(DEFAULT_DAMAGE_TYPES),
+    calibrationSessions: [],
+    calibrationPlans: [],
   };
 
   function readRaw() {
@@ -196,6 +198,14 @@
       });
     } else {
       state.calibrationSessions = [];
+    }
+
+    if (raw.calibrationPlans && Array.isArray(raw.calibrationPlans)) {
+      state.calibrationPlans = raw.calibrationPlans.filter(function (p) {
+        return p && p.id && p.name && p.sourcePoints && p.targetPoints;
+      });
+    } else {
+      state.calibrationPlans = [];
     }
 
     return state;

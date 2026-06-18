@@ -126,6 +126,21 @@
       </div>
 
       <div id="calibResult" class="calib-result" style="display:none;"></div>
+
+      <div class="calib-plan-actions" id="calibPlanActions">
+        <button id="calibSavePlanBtn" type="button" class="primary">💾 保存为校准方案</button>
+      </div>
+    </section>
+
+    <section class="calib-plans-section" id="calibPlansSection">
+      <div class="calib-section-header">
+        <h2>📚 校准方案库</h2>
+        <span class="calib-plans-count" id="calibPlansCount">0 个方案</span>
+      </div>
+      <p class="calib-plans-hint">已保存的校准方案可在本卷册其他相邻页面快速复用，避免重复选取校准点。</p>
+      <div id="calibPlansList" class="calib-plans-list">
+        <div class="calib-plans-empty" id="calibPlansEmpty">暂无保存的校准方案。完成校准点选取后可保存为命名方案。</div>
+      </div>
     </section>
 
     <section class="calib-migration-section" id="calibMigrationSection" style="display:none;">
@@ -152,6 +167,72 @@
       <div id="migrationList" class="migration-list"></div>
     </section>
   </main>
+
+  <div class="modal-overlay" id="savePlanModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>💾 保存校准方案</h2>
+        <button class="modal-close" id="closeSavePlanBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="plan-save-form">
+          <label>
+            <span>方案名称 *</span>
+            <input type="text" id="planNameInput" placeholder="如：书口四角对齐方案" maxlength="50" />
+          </label>
+          <label>
+            <span>方案说明</span>
+            <textarea id="planDescInput" rows="3" placeholder="可选：方案适用场景、注意事项等" maxlength="200"></textarea>
+          </label>
+          <div class="plan-preview-info" id="savePlanPreview"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelSavePlanBtn" type="button">取消</button>
+        <button id="confirmSavePlanBtn" type="button" class="primary">确认保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="planPreviewModal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>⚠ 应用方案前确认</h2>
+        <button class="modal-close" id="closePlanPreviewBtn" type="button">×</button>
+      </div>
+      <div class="modal-body" id="planPreviewBody">
+      </div>
+      <div class="modal-footer">
+        <button id="cancelApplyPlanBtn" type="button">取消</button>
+        <button id="confirmApplyPlanBtn" type="button" class="primary">确认应用方案</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="renamePlanModal" style="display:none;">
+    <div class="modal modal-small">
+      <div class="modal-header">
+        <h2>✎ 重命名方案</h2>
+        <button class="modal-close" id="closeRenamePlanBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="plan-save-form">
+          <label>
+            <span>方案名称 *</span>
+            <input type="text" id="renamePlanNameInput" placeholder="方案名称" maxlength="50" />
+          </label>
+          <label>
+            <span>方案说明</span>
+            <textarea id="renamePlanDescInput" rows="3" placeholder="可选：方案适用场景、注意事项等" maxlength="200"></textarea>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelRenamePlanBtn" type="button">取消</button>
+        <button id="confirmRenamePlanBtn" type="button" class="primary">保存修改</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toastContainer" class="toast-container"></div>
 
