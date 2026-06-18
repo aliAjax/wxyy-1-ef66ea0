@@ -243,6 +243,19 @@
 
     var totalImageSizeKB = imageSizes.reduce(function (acc, s) { return acc + s.imageSize; }, 0);
 
+    var taskQueueData = null;
+    if (global.TaskQueue && typeof global.TaskQueue.exportForPackage === "function") {
+      try {
+        taskQueueData = global.TaskQueue.exportForPackage();
+        if (!taskQueueData || !Array.isArray(taskQueueData.tasks)) {
+          taskQueueData = null;
+        }
+      } catch (e) {
+        console.warn("导出任务队列数据失败", e);
+        taskQueueData = null;
+      }
+    }
+
     var result = {
       format: PACKAGE_FORMAT,
       formatVersion: PACKAGE_VERSION,
@@ -266,6 +279,8 @@
         calibrationSessionCount: calibrationSessions.length,
         imageRefCount: imageRefCount,
         totalImageSizeKB: totalImageSizeKB,
+        hasTaskQueue: !!taskQueueData,
+        taskCount: taskQueueData ? taskQueueData.taskCount : 0,
       },
       pages: pages,
       calibrationSessions: calibrationSessions,
@@ -276,6 +291,10 @@
         },
       },
     };
+
+    if (taskQueueData) {
+      result.taskQueue = taskQueueData;
+    }
 
     if (hasRealCoords) {
       result.coordSystem = "dual";
@@ -1033,6 +1052,9 @@
     var migrationNotes = packageData._migrationNotes || [];
     var migrationSteps = packageData._migrationSteps || [];
 
+    var hasTaskQueue = !!(packageData.taskQueue && Array.isArray(packageData.taskQueue.tasks));
+    var taskCount = hasTaskQueue ? packageData.taskQueue.tasks.length : 0;
+
     return {
       packageName: packageData.packageName || proj.title || proj.id || "未命名项目",
       pageCount: packageData.pages ? packageData.pages.length : 0,
@@ -1052,7 +1074,78 @@
       migrationSteps: migrationSteps,
       projectId: proj.id || "",
       projectTitle: proj.title || "",
+      hasTaskQueue: hasTaskQueue,
+      taskCount: taskCount,
     };
+  }
+
+  function getTaskQueuePreview(packageData) {
+    var result = {
+      hasTaskQueue: false,
+      taskCount: 0,
+      statusCounts: { pending: 0, in_progress: 0, completed: 0 },
+      linkedTaskCount: 0,
+      orphanTaskCount: 0,
+      standaloneTaskCount: 0,
+      localTaskCount: 0,
+      conflicts: [],
+    };
+
+    var tq = packageData && packageData.taskQueue;
+    if (!tq || !Array.isArray(tq.tasks)) {
+      return result;
+    }
+
+    result.hasTaskQueue = true;
+
+    var pageIds = new Set();
+    (packageData.pages || []).forEach(function (p) {
+      if (p && p.id) pageIds.add(p.id);
+    });
+
+    var localTaskCount = 0;
+    if (global.TaskQueue && Array.isArray(global.TaskQueue.tasks)) {
+      localTaskCount = global.TaskQueue.tasks.length;
+    }
+    result.localTaskCount = localTaskCount;
+
+    tq.tasks.forEach(function (t) {
+      if (!t || !t.id) return;
+      result.taskCount++;
+      var st = t.status || "pending";
+      if (result.statusCounts[st] !== undefined) result.statusCounts[st]++;
+      if (!t.pageId) {
+        result.standaloneTaskCount++;
+      } else if (pageIds.has(t.pageId)) {
+        result.linkedTaskCount++;
+      } else {
+        result.orphanTaskCount++;
+      }
+    });
+
+    if (result.orphanTaskCount > 0) {
+      result.conflicts.push({
+        code: "ORPHAN_TASK_PAGES",
+        level: "warning",
+        message: result.orphanTaskCount + " 个任务关联的页面不在工作包中，导入后将作为独立任务保留（无关联页面）。",
+      });
+    }
+    if (result.standaloneTaskCount > 0) {
+      result.conflicts.push({
+        code: "STANDALONE_TASKS",
+        level: "info",
+        message: result.standaloneTaskCount + " 个任务未关联页面，导入后将作为独立任务保留。",
+      });
+    }
+    if (localTaskCount > 0) {
+      result.conflicts.push({
+        code: "LOCAL_TASKS_REPLACE",
+        level: "info",
+        message: "当前本地任务队列有 " + localTaskCount + " 个任务，导入后将替换为工作包中的任务队列。",
+      });
+    }
+
+    return result;
   }
 
   function sanitizeFilenamePart(str) {
@@ -1233,6 +1326,7 @@
     migrateCurrentVersion: migrateCurrentVersion,
     packageToState: packageToState,
     getPackageSummary: getPackageSummary,
+    getTaskQueuePreview: getTaskQueuePreview,
     getQuickInfo: getQuickInfo,
     downloadPackage: downloadPackage,
     detectFormat: detectFormat,

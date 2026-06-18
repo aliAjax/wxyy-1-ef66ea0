@@ -2269,6 +2269,96 @@ button.primary:hover {
   line-height: 1.5;
 }
 
+.task-queue-preview {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f6fbff;
+  margin-bottom: 14px;
+}
+
+.task-queue-preview.has-conflict {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+
+.tq-preview-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tq-preview-body {
+  display: grid;
+  gap: 4px;
+}
+
+.tq-preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.tq-preview-row span {
+  color: var(--muted);
+}
+
+.tq-preview-row strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tq-preview-row strong.accent {
+  color: var(--accent);
+}
+
+.tq-preview-note {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tq-preview-conflicts {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  display: grid;
+  gap: 6px;
+}
+
+.tq-preview-conflict-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+.tq-preview-conflict-item.warning {
+  background: rgba(217, 119, 6, 0.12);
+  color: #92400e;
+}
+
+.tq-preview-conflict-item.info {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1e40af;
+}
+
+.tq-preview-conflict-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
 .import-loading {
   display: flex;
   align-items: center;

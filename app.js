@@ -61,6 +61,7 @@
   const importFileInfo = document.getElementById("importFileInfo");
   const importIntegrity = document.getElementById("importIntegrity");
   const importSummary = document.getElementById("importSummary");
+  const importTaskQueuePreview = document.getElementById("importTaskQueuePreview");
   const importMigrationDetail = document.getElementById("importMigrationDetail");
   const importRestoreWarnings = document.getElementById("importRestoreWarnings");
   const importLoading = document.getElementById("importLoading");
@@ -443,12 +444,14 @@
     var includeImages = exportIncludeImages.checked;
     var options = { includeImages: includeImages };
     var summary = Package.getExportSummary(State.all, options);
+    var taskCount = (TaskQueue && TaskQueue.tasks) ? TaskQueue.tasks.length : 0;
 
     exportSummary.innerHTML =
       '<div class="export-summary-row"><span>项目名称</span><strong>' + escapeHtmlSimple(summary.projectName) + '</strong></div>' +
       '<div class="export-summary-row"><span>页面数</span><strong>' + summary.pageCount + ' 页</strong></div>' +
       '<div class="export-summary-row"><span>标记总数</span><strong class="accent">' + summary.totalMarkers + ' 条</strong></div>' +
       '<div class="export-summary-row"><span>损伤类型</span><strong>' + summary.damageTypeCount + ' 种</strong></div>' +
+      '<div class="export-summary-row"><span>任务队列</span><strong>' + taskCount + ' 个任务（一并导出）</strong></div>' +
       '<div class="export-summary-row"><span>格式版本</span><strong>v' + Package.PACKAGE_VERSION + '</strong></div>';
 
     if (includeImages && summary.hasImages) {
@@ -521,6 +524,7 @@
     importFileInfo.style.display = "none";
     importIntegrity.style.display = "none";
     importSummary.style.display = "none";
+    importTaskQueuePreview.style.display = "none";
     importMigrationDetail.style.display = "none";
     importRestoreWarnings.style.display = "none";
     importLoading.style.display = "none";
@@ -653,6 +657,59 @@
       '<div class="import-summary-note">导入将替换当前所有工作数据，请确认已备份现有数据。</div>';
 
     importSummary.style.display = "block";
+  }
+
+  function showImportTaskQueuePreview(preview) {
+    if (!preview) {
+      importTaskQueuePreview.style.display = "none";
+      return;
+    }
+
+    if (!preview.hasTaskQueue) {
+      importTaskQueuePreview.innerHTML =
+        '<div class="tq-preview-title">📋 离线审校任务队列</div>' +
+        '<div class="tq-preview-body">' +
+          '<div class="tq-preview-row"><span>任务数据</span><strong>工作包不含任务队列数据（旧版工作包）</strong></div>' +
+          '<div class="tq-preview-note">导入后将根据卷册页面自动生成待标注任务，复核备注与优先级不会保留。</div>' +
+        '</div>';
+      importTaskQueuePreview.classList.remove("has-conflict");
+      importTaskQueuePreview.style.display = "block";
+      return;
+    }
+
+    var statusParts = [];
+    statusParts.push("待标注 " + preview.statusCounts.pending);
+    statusParts.push("标注中 " + preview.statusCounts.in_progress);
+    statusParts.push("已完成 " + preview.statusCounts.completed);
+
+    var conflictsHtml = "";
+    if (preview.conflicts && preview.conflicts.length > 0) {
+      conflictsHtml = '<div class="tq-preview-conflicts">';
+      preview.conflicts.forEach(function (c) {
+        var icon = c.level === "warning" ? "⚠" : "ℹ";
+        conflictsHtml +=
+          '<div class="tq-preview-conflict-item ' + (c.level || "info") + '">' +
+            '<span class="tq-preview-conflict-icon">' + icon + '</span>' +
+            '<span>' + escapeHtmlSimple(c.message) + '</span>' +
+          '</div>';
+      });
+      conflictsHtml += '</div>';
+    }
+
+    importTaskQueuePreview.innerHTML =
+      '<div class="tq-preview-title">📋 离线审校任务队列</div>' +
+      '<div class="tq-preview-body">' +
+        '<div class="tq-preview-row"><span>即将恢复任务</span><strong class="accent">' + preview.taskCount + ' 个</strong></div>' +
+        '<div class="tq-preview-row"><span>关联页面任务</span><strong>' + preview.linkedTaskCount + ' 个</strong></div>' +
+        '<div class="tq-preview-row"><span>任务状态</span><strong>' + escapeHtmlSimple(statusParts.join(" · ")) + '</strong></div>' +
+      '</div>' +
+      conflictsHtml;
+
+    importTaskQueuePreview.classList.toggle(
+      "has-conflict",
+      preview.conflicts.some(function (c) { return c.level === "warning"; })
+    );
+    importTaskQueuePreview.style.display = "block";
   }
 
   function showImportMigrationDetail(result) {
@@ -804,6 +861,9 @@
 
         showImportSummary(summary, result.packageData);
 
+        var taskPreview = Package.getTaskQueuePreview(result.packageData);
+        showImportTaskQueuePreview(taskPreview);
+
         var restoreCheck = Package.validateForRestore(result.packageData);
         if (restoreCheck.warnings && restoreCheck.warnings.length > 0) {
           showImportRestoreWarnings(restoreCheck.warnings);
@@ -848,8 +908,12 @@
       hideAllImportStates();
       importSuccess.style.display = "flex";
       if (importSuccessInfo) {
+        var taskInfoText = result.taskQueueRestored
+          ? "、" + (result.taskCount || 0) + " 个任务" + (result.taskQueueRebuilt ? "（自动生成）" : "")
+          : "";
         importSuccessInfo.textContent =
           "已恢复 " + result.pageCount + " 页、" + result.markerCount + " 条标记" +
+          taskInfoText +
           (result.projectTitle ? "（" + result.projectTitle + "）" : "");
       }
       confirmImportBtn.style.display = "none";
@@ -859,7 +923,11 @@
         showImportRestoreWarnings(result.warnings);
       }
 
-      showToast("项目工作包导入成功，已恢复 " + result.pageCount + " 页数据", "success");
+      showToast(
+        "项目工作包导入成功，已恢复 " + result.pageCount + " 页" +
+        (result.taskQueueRestored ? "、" + (result.taskCount || 0) + " 个任务" : "") + "数据",
+        "success"
+      );
 
       if (CalibrationUI && pendingImportData && pendingImportData.calibrationSessions && pendingImportData.calibrationSessions.length > 0) {
         var latestSession = pendingImportData.calibrationSessions[0];
@@ -878,17 +946,31 @@
         closeImportModal();
       }, 2500);
     } else {
-      var rollbackMsg = result.rolledBack
-        ? "已自动回滚到导入前的状态（通过" + (result.rollbackMethod === "snapshot" ? "快照" : "备份") + "），当前数据未被修改。"
-        : result.backupWasCreated || result.snapshotWasCreated
-          ? "快照/备份已创建但回滚未完成，请检查数据完整性。"
-          : "当前数据未被修改。";
+      var rollbackMsg;
+      if (result.rolledBack) {
+        rollbackMsg = "已自动回滚到导入前的状态（通过" + (result.rollbackMethod === "snapshot" ? "快照" : "备份") + "）";
+        if (result.taskRolledBack) {
+          rollbackMsg += "，卷册与任务队列均未被修改。";
+        } else {
+          rollbackMsg += "，卷册数据未被修改。";
+        }
+      } else if (result.backupWasCreated || result.snapshotWasCreated) {
+        rollbackMsg = "快照/备份已创建但回滚未完成，请检查数据完整性。";
+      } else {
+        rollbackMsg = "当前数据未被修改。";
+      }
+
+      if (result.failedDuringTaskQueue) {
+        rollbackMsg = "任务队列写入失败，" + rollbackMsg;
+      }
 
       var resolution = result.isQuotaError
         ? Package.ERROR_RESOLUTIONS.STORAGE_QUOTA_EXCEEDED
         : result.preCheckFailed
           ? "请确认工作包文件格式正确且数据完整。"
-          : Package.ERROR_RESOLUTIONS.RESTORE_FAILED;
+          : result.failedDuringTaskQueue
+            ? "可尝试先导出当前任务队列备份后清空，或清理浏览器存储后重试。"
+            : Package.ERROR_RESOLUTIONS.RESTORE_FAILED;
 
       showImportError(
         "导入失败，" + rollbackMsg,

@@ -369,6 +369,13 @@
       var snapshotResult = global.VolumeStorage.createSnapshot();
       var backupSuccess = global.VolumeStorage.backup();
 
+      var hasTaskQueue = !!global.TaskQueue;
+      var taskSnapshotResult = hasTaskQueue ? global.TaskQueue.createSnapshot() : { success: false };
+      var taskBackupSuccess = hasTaskQueue ? global.TaskQueue.backup() : false;
+
+      var failedDuringTaskQueue = false;
+      var taskQueueErrorDetail = null;
+
       try {
         var newState = global.VolumeStorage.restoreFromPackage(packageData);
 
@@ -394,10 +401,32 @@
         refreshMarkerTypeNames(this._state);
         this._notify();
 
+        var taskResult = { success: true, skipped: true, taskCount: 0, rebuilt: false };
+        if (hasTaskQueue) {
+          if (packageData.taskQueue && Array.isArray(packageData.taskQueue.tasks)) {
+            taskResult = global.TaskQueue.replaceFromPackage(packageData.taskQueue, newState);
+            taskResult.rebuilt = false;
+          } else {
+            taskResult = global.TaskQueue.rebuildFromPages(newState.pages, newState.damageTypes);
+            taskResult.rebuilt = true;
+          }
+          if (!taskResult.success) {
+            failedDuringTaskQueue = true;
+            taskQueueErrorDetail = taskResult.error || null;
+            throw new Error("任务队列恢复失败：" + (taskResult.error || "未知错误"));
+          }
+        }
+
         if (backupSuccess) {
           global.VolumeStorage.clearBackup();
         }
         global.VolumeStorage.clearSnapshot();
+        if (hasTaskQueue) {
+          if (taskBackupSuccess) {
+            global.TaskQueue.clearBackup();
+          }
+          global.TaskQueue.clearSnapshot();
+        }
 
         return {
           success: true,
@@ -406,6 +435,9 @@
           markerCount: newState.pages.reduce(function (acc, p) {
             return acc + (p.markers ? p.markers.length : 0);
           }, 0),
+          taskCount: taskResult.taskCount,
+          taskQueueRestored: !taskResult.skipped,
+          taskQueueRebuilt: taskResult.rebuilt,
           warnings: (preCheck.warnings || []).concat(integrityCheck.warnings || []),
           projectTitle: newState.volumeTitle || "",
           snapshotMeta: snapshotResult.success ? snapshotResult.meta : null,
@@ -436,6 +468,25 @@
 
         global.VolumeStorage.clearSnapshot();
 
+        var taskRolledBack = false;
+        if (hasTaskQueue) {
+          if (taskSnapshotResult.success) {
+            taskRolledBack = global.TaskQueue.restoreSnapshot();
+          }
+          if (!taskRolledBack && taskBackupSuccess) {
+            var taskBackupValid = global.TaskQueue.verifyBackupIntegrity();
+            if (taskBackupValid.valid) {
+              taskRolledBack = global.TaskQueue.restoreBackup();
+            }
+          }
+          if (!taskRolledBack) {
+            try { global.TaskQueue.reload(); } catch (reloadErr) {
+              console.error("任务队列重新加载失败", reloadErr);
+            }
+          }
+          global.TaskQueue.clearSnapshot();
+        }
+
         var isQuotaError = e.name === "QuotaExceededError" ||
           (e.message && e.message.indexOf("quota") !== -1) ||
           (e.message && e.message.indexOf("存储空间") !== -1);
@@ -445,6 +496,9 @@
           error: e,
           rolledBack: rolledBack,
           rollbackMethod: rollbackMethod,
+          taskRolledBack: taskRolledBack,
+          failedDuringTaskQueue: failedDuringTaskQueue,
+          taskQueueErrorDetail: taskQueueErrorDetail,
           errorMessage: e.message || String(e),
           isQuotaError: isQuotaError,
           backupWasCreated: backupSuccess,
