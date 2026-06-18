@@ -342,6 +342,14 @@
     };
   }
 
+  var REVIEW_STATUSES = ["pending", "passed", "doubtful", "rejected"];
+  var STATUS_LABELS = {
+    pending: "待复核",
+    passed: "已通过",
+    doubtful: "存疑",
+    rejected: "已退回",
+  };
+
   function normalizeMarkerForExport(m, damageTypes) {
     if (!m || typeof m.id !== "string") return null;
     var mode = m.mode === "region" ? "region" : "point";
@@ -386,6 +394,13 @@
     }
     if (m.positionAdjusted) {
       base.positionAdjusted = true;
+    }
+    if (m.review && m.review.status && REVIEW_STATUSES.indexOf(m.review.status) !== -1) {
+      base.review = {
+        status: m.review.status,
+        comment: (m.review.comment || "").trim(),
+        reviewedAt: m.review.reviewedAt || null,
+      };
     }
     return base;
   }
@@ -956,7 +971,16 @@
           image: p.image || "",
           imageWidth: p.imageWidth !== undefined && p.imageWidth !== null ? Number(p.imageWidth) || undefined : undefined,
           imageHeight: p.imageHeight !== undefined && p.imageHeight !== null ? Number(p.imageHeight) || undefined : undefined,
-          markers: Array.isArray(p.markers) ? p.markers : [],
+          markers: Array.isArray(p.markers) ? p.markers.map(function (m) {
+            if (m.review && m.review.status && REVIEW_STATUSES.indexOf(m.review.status) !== -1) {
+              m.review = {
+                status: m.review.status,
+                comment: (m.review.comment || "").trim(),
+                reviewedAt: m.review.reviewedAt || null,
+              };
+            }
+            return m;
+          }) : [],
           createdAt: p.createdAt || now,
           updatedAt: p.updatedAt || now,
         };
@@ -967,6 +991,113 @@
       damageTypes: packageData.damageTypes,
       calibrationSessions: packageData.calibrationSessions || [],
     };
+  }
+
+  function analyzeReviewMatches(packageData, currentState) {
+    var result = {
+      hasReviewData: false,
+      totalInPackage: 0,
+      totalWillBeApplied: 0,
+      totalCannotApply: 0,
+      toApply: [],
+      cannotApply: [],
+      stats: {
+        passed: 0,
+        doubtful: 0,
+        rejected: 0,
+        pending: 0,
+      },
+    };
+
+    if (!packageData || !packageData.pages) return result;
+
+    var packagePageIds = new Set(packageData.pages.map(function (p) { return p.id; }));
+    var packageMarkerIds = new Set();
+    packageData.pages.forEach(function (p) {
+      if (p.markers) {
+        p.markers.forEach(function (m) { packageMarkerIds.add(m.id); });
+      }
+    });
+
+    var currentPageIds = new Set();
+    var currentMarkerIds = new Set();
+    if (currentState && currentState.pages) {
+      currentState.pages.forEach(function (p) {
+        currentPageIds.add(p.id);
+        if (p.markers) {
+          p.markers.forEach(function (m) { currentMarkerIds.add(m.id); });
+        }
+      });
+    }
+
+    packageData.pages.forEach(function (p) {
+      if (!p.markers) return;
+      p.markers.forEach(function (m) {
+        if (!m.review || m.review.status === "pending" || !m.review.status) return;
+
+        result.hasReviewData = true;
+        result.totalInPackage++;
+
+        if (m.review.status === "passed") result.stats.passed++;
+        else if (m.review.status === "doubtful") result.stats.doubtful++;
+        else if (m.review.status === "rejected") result.stats.rejected++;
+        else if (m.review.status === "pending") result.stats.pending++;
+
+        var markerInPackage = packageMarkerIds.has(m.id);
+        var pageInPackage = packagePageIds.has(p.id);
+        var markerValid = m.id && pageInPackage && markerInPackage;
+
+        var hasConflict = false;
+        var conflictReason = "";
+
+        if (!m.id) {
+          hasConflict = true;
+          conflictReason = "标记ID缺失";
+        } else if (!p.id) {
+          hasConflict = true;
+          conflictReason = "页面ID缺失";
+        } else if (!pageInPackage) {
+          hasConflict = true;
+          conflictReason = "页面不存在于包中";
+        } else if (!markerInPackage) {
+          hasConflict = true;
+          conflictReason = "标记不存在于包中";
+        }
+
+        if (currentState && currentState.pages && !hasConflict) {
+          var pageInCurrent = currentPageIds.has(p.id);
+          var markerInCurrent = currentMarkerIds.has(m.id);
+          if (!pageInCurrent) {
+            hasConflict = true;
+            conflictReason = "页面不存在于当前项目";
+          } else if (!markerInCurrent) {
+            hasConflict = true;
+            conflictReason = "标记不存在于当前项目";
+          }
+        }
+
+        var entry = {
+          markerId: m.id,
+          pageId: p.id,
+          pageName: p.name || p.fileName || p.id,
+          markerType: m.type || "",
+          status: m.review.status,
+          statusLabel: STATUS_LABELS[m.review.status],
+          comment: m.review.comment || "",
+        };
+
+        if (hasConflict) {
+          entry.reason = conflictReason;
+          result.cannotApply.push(entry);
+          result.totalCannotApply++;
+        } else {
+          result.toApply.push(entry);
+          result.totalWillBeApplied++;
+        }
+      });
+    });
+
+    return result;
   }
 
   function verifyRoundTripIntegrity(packageData, restoredState) {
@@ -1055,6 +1186,27 @@
     var hasTaskQueue = !!(packageData.taskQueue && Array.isArray(packageData.taskQueue.tasks));
     var taskCount = hasTaskQueue ? packageData.taskQueue.tasks.length : 0;
 
+    var reviewStats = {
+      hasReviewData: false,
+      totalReviewed: 0,
+      passed: 0,
+      doubtful: 0,
+      rejected: 0,
+      pending: 0,
+    };
+    (packageData.pages || []).forEach(function (p) {
+      if (!p.markers) return;
+      p.markers.forEach(function (m) {
+        if (m.review && m.review.status && m.review.status !== "pending") {
+          reviewStats.hasReviewData = true;
+          reviewStats.totalReviewed++;
+          if (m.review.status === "passed") reviewStats.passed++;
+          else if (m.review.status === "doubtful") reviewStats.doubtful++;
+          else if (m.review.status === "rejected") reviewStats.rejected++;
+        }
+      });
+    });
+
     return {
       packageName: packageData.packageName || proj.title || proj.id || "未命名项目",
       pageCount: packageData.pages ? packageData.pages.length : 0,
@@ -1076,6 +1228,7 @@
       projectTitle: proj.title || "",
       hasTaskQueue: hasTaskQueue,
       taskCount: taskCount,
+      reviewStats: reviewStats,
     };
   }
 
@@ -1317,6 +1470,8 @@
     MAX_PACKAGE_SIZE: MAX_PACKAGE_SIZE,
     ERROR_CODES: ERROR_CODES,
     ERROR_RESOLUTIONS: ERROR_RESOLUTIONS,
+    REVIEW_STATUSES: REVIEW_STATUSES,
+    REVIEW_STATUS_LABELS: STATUS_LABELS,
     PackageError: PackageError,
     exportPackage: exportPackage,
     getExportSummary: getExportSummary,
@@ -1337,5 +1492,6 @@
     checkStorageQuota: checkStorageQuota,
     formatBytes: formatBytes,
     verifyRoundTripIntegrity: verifyRoundTripIntegrity,
+    analyzeReviewMatches: analyzeReviewMatches,
   };
 })(window);

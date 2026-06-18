@@ -611,8 +611,9 @@
       const types = this._state.damageTypes;
       const counts = Object.fromEntries(types.map((t) => [t.id, 0]));
       const nameCounts = Object.fromEntries(types.map((t) => [t.name, 0]));
+      const reviewCounts = { passed: 0, doubtful: 0, rejected: 0, pending: 0, total: 0 };
       if (!page || !Array.isArray(page.markers)) {
-        return { byId: counts, byName: nameCounts, types };
+        return { byId: counts, byName: nameCounts, types, reviewCounts };
       }
       page.markers.forEach((m) => {
         if (m.typeId && counts[m.typeId] !== undefined) {
@@ -620,14 +621,23 @@
           const t = this.findTypeById(m.typeId);
           if (t) nameCounts[t.name] += 1;
         }
+        reviewCounts.total++;
+        if (m.review && m.review.status) {
+          if (reviewCounts[m.review.status] !== undefined) {
+            reviewCounts[m.review.status]++;
+          }
+        } else {
+          reviewCounts.pending++;
+        }
       });
-      return { byId: counts, byName: nameCounts, types };
+      return { byId: counts, byName: nameCounts, types, reviewCounts };
     },
 
     getTotalCounts() {
       const types = this._state.damageTypes;
       const counts = Object.fromEntries(types.map((t) => [t.id, 0]));
       const nameCounts = Object.fromEntries(types.map((t) => [t.name, 0]));
+      const reviewCounts = { passed: 0, doubtful: 0, rejected: 0, pending: 0, total: 0 };
       this._state.pages.forEach((p) =>
         p.markers.forEach((m) => {
           if (m.typeId && counts[m.typeId] !== undefined) {
@@ -635,9 +645,54 @@
             const t = this.findTypeById(m.typeId);
             if (t) nameCounts[t.name] += 1;
           }
+          reviewCounts.total++;
+          if (m.review && m.review.status) {
+            if (reviewCounts[m.review.status] !== undefined) {
+              reviewCounts[m.review.status]++;
+            }
+          } else {
+            reviewCounts.pending++;
+          }
         })
       );
-      return { byId: counts, byName: nameCounts, types };
+      return { byId: counts, byName: nameCounts, types, reviewCounts };
+    },
+
+    getMarkerReviewStatus(markerId, pageId) {
+      const page = pageId
+        ? this._state.pages.find((p) => p.id === pageId)
+        : this.currentPage;
+      if (!page) return null;
+      const marker = page.markers.find((m) => m.id === markerId);
+      if (!marker || !marker.review) return null;
+      return marker.review;
+    },
+
+    hasReviewData() {
+      return this._state.pages.some((p) =>
+        p.markers.some((m) => m.review && m.review.status && m.review.status !== "pending")
+      );
+    },
+
+    getReviewStats() {
+      const stats = { passed: 0, doubtful: 0, rejected: 0, pending: 0, total: 0, hasData: false };
+      this._state.pages.forEach((p) => {
+        p.markers.forEach((m) => {
+          stats.total++;
+          if (m.review && m.review.status) {
+            if (stats[m.review.status] !== undefined) {
+              stats[m.review.status]++;
+              if (m.review.status !== "pending") stats.hasData = true;
+            } else {
+              stats.pending++;
+            }
+          } else {
+            stats.pending++;
+          }
+        });
+      });
+      stats.progress = stats.total > 0 ? Math.round(((stats.total - stats.pending) / stats.total) * 100) : 0;
+      return stats;
     },
 
     addMigratedMarker({ typeId, type, note, x, y, realX, realY, sourceMarkerId, migratedFrom, transformType, positionAdjusted }) {

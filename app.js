@@ -62,6 +62,7 @@
   const importIntegrity = document.getElementById("importIntegrity");
   const importSummary = document.getElementById("importSummary");
   const importTaskQueuePreview = document.getElementById("importTaskQueuePreview");
+  const importReviewPreview = document.getElementById("importReviewPreview");
   const importMigrationDetail = document.getElementById("importMigrationDetail");
   const importRestoreWarnings = document.getElementById("importRestoreWarnings");
   const importLoading = document.getElementById("importLoading");
@@ -525,6 +526,7 @@
     importIntegrity.style.display = "none";
     importSummary.style.display = "none";
     importTaskQueuePreview.style.display = "none";
+    importReviewPreview.style.display = "none";
     importMigrationDetail.style.display = "none";
     importRestoreWarnings.style.display = "none";
     importLoading.style.display = "none";
@@ -712,6 +714,106 @@
     importTaskQueuePreview.style.display = "block";
   }
 
+  function showReviewPreview(packageData) {
+    if (!packageData) {
+      importReviewPreview.style.display = "none";
+      return;
+    }
+
+    var currentState = State.all;
+    var reviewAnalysis = Package.analyzeReviewMatches(packageData, currentState);
+
+    if (!reviewAnalysis.hasReviewData) {
+      importReviewPreview.style.display = "none";
+      return;
+    }
+
+    var statusLabels = Package.REVIEW_STATUS_LABELS || {
+      passed: "已通过",
+      doubtful: "存疑",
+      rejected: "已退回",
+      pending: "待复核",
+    };
+
+    var willApplyCount = reviewAnalysis.toApply.length;
+    var cannotApplyCount = reviewAnalysis.cannotApply.length;
+    var summaryClass = cannotApplyCount > 0 ? "warning" : "success";
+
+    var html =
+      '<div class="review-preview-title">🔍 复核结果数据</div>' +
+
+      '<div class="review-preview-meta">' +
+        '<div class="review-preview-meta-item">' +
+          '<span class="label">复核记录总数</span>' +
+          '<span class="value">' + reviewAnalysis.totalInPackage + ' 条</span>' +
+        '</div>' +
+        '<div class="review-preview-meta-item">' +
+          '<span class="label">可应用</span>' +
+          '<span class="value" style="color:#3d7a3d;">' + willApplyCount + ' 条</span>' +
+        '</div>' +
+        '<div class="review-preview-meta-item">' +
+          '<span class="label">无法应用</span>' +
+          '<span class="value" style="color:var(--danger);">' + cannotApplyCount + ' 条</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="review-preview-summary ' + summaryClass + '">' +
+        '<div class="review-preview-summary-line">' +
+          '<span class="key">状态分布</span>' +
+          '<span class="val">' +
+            '<span class="review-status-badge passed">' + statusLabels.passed + ' ' + reviewAnalysis.stats.passed + '</span> ' +
+            '<span class="review-status-badge doubtful">' + statusLabels.doubtful + ' ' + reviewAnalysis.stats.doubtful + '</span> ' +
+            '<span class="review-status-badge rejected">' + statusLabels.rejected + ' ' + reviewAnalysis.stats.rejected + '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="review-preview-summary-line">' +
+          '<span class="key">导入后状态</span>' +
+          '<span class="val">' +
+            (cannotApplyCount > 0
+              ? willApplyCount + ' 条复核结果将应用到对应标记，' + cannotApplyCount + ' 条无法匹配'
+              : '全部 ' + willApplyCount + ' 条复核结果都将应用到对应标记') +
+          '</span>' +
+        '</div>' +
+      '</div>';
+
+    if (cannotApplyCount > 0) {
+      html +=
+        '<div class="review-preview-unmatched">' +
+          '<div class="review-preview-unmatched-title">⚠ 无法应用的复核记录</div>' +
+          '<div class="review-preview-unmatched-list">';
+
+      reviewAnalysis.cannotApply.slice(0, 10).forEach(function (item) {
+        var displayType = item.markerType || "未知类型";
+        var displayMarkerId = item.markerId || "未知ID";
+        html +=
+          '<div class="review-preview-unmatched-item">' +
+            '<div class="item-header">' +
+              '<span class="item-title">' +
+                '<span class="review-status-badge ' + item.status + '" style="margin-right:6px;">' + escapeHtmlSimple(item.statusLabel) + '</span>' +
+                escapeHtmlSimple(displayType) + ' · ' + escapeHtmlSimple(displayMarkerId) +
+              '</span>' +
+              '<span class="item-reason">' + escapeHtmlSimple(item.reason) + '</span>' +
+            '</div>' +
+            '<div class="item-detail">' +
+              '页面：' + escapeHtmlSimple(item.pageName) +
+              (item.comment ? ' · 复核意见：' + escapeHtmlSimple(item.comment) : '') +
+            '</div>' +
+          '</div>';
+      });
+
+      if (cannotApplyCount > 10) {
+        html += '<div class="review-preview-unmatched-item" style="text-align:center;color:var(--muted);padding:10px;">... 还有 ' + (cannotApplyCount - 10) + ' 条未显示</div>';
+      }
+
+      html +=
+          '</div>' +
+        '</div>';
+    }
+
+    importReviewPreview.innerHTML = html;
+    importReviewPreview.style.display = "block";
+  }
+
   function showImportMigrationDetail(result) {
     if (!result.wasMigrated) return;
     var steps = [];
@@ -863,6 +965,8 @@
 
         var taskPreview = Package.getTaskQueuePreview(result.packageData);
         showImportTaskQueuePreview(taskPreview);
+
+        showReviewPreview(result.packageData);
 
         var restoreCheck = Package.validateForRestore(result.packageData);
         if (restoreCheck.warnings && restoreCheck.warnings.length > 0) {

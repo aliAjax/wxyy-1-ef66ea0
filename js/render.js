@@ -525,6 +525,22 @@
     var title = `${marker.mode === "region" ? "[区域] " : ""}${typeInfo.name}${marker.note ? "：" + marker.note : ""}`;
     if (marker.migrated) title += " [跨页迁移]";
 
+    let reviewIndicator = "";
+    let reviewCls = "";
+    if (marker.review && marker.review.status && marker.review.status !== "pending") {
+      const statusLabel = getStatusLabel(marker.review.status);
+      title += ` [${statusLabel}]`;
+      if (marker.review.comment) {
+        title += `：${marker.review.comment}`;
+      }
+      reviewCls = ` has-review review-${marker.review.status}`;
+      reviewIndicator = `<span class="review-indicator">${
+        marker.review.status === "passed" ? "✓" :
+        marker.review.status === "doubtful" ? "?" :
+        marker.review.status === "rejected" ? "✕" : ""
+      }</span>`;
+    }
+
     let styleStr = "";
     for (const key in style) {
       styleStr += `${key}:${style[key]};`;
@@ -535,23 +551,26 @@
 
     if (marker.mode === "region") {
       return `
-        <span class="region-marker${migrCls}${selectedCls}"
+        <span class="region-marker${migrCls}${selectedCls}${reviewCls}"
               data-type="${escapeHtml(typeInfo.name)}"
               data-type-id="${marker.typeId}"
               data-marker="${marker.id}"
               title="${escapeHtml(title)}"
               style="${styleStr}border-color:${color};background:${fill};">
           <span class="region-label" style="background:${color};">${escapeHtml(typeInfo.name)}${marker.migrated ? " ⟵" : ""}</span>
+          ${reviewIndicator}
         </span>
       `;
     }
     return `
-      <span class="marker${migrCls}${selectedCls}"
+      <span class="marker${migrCls}${selectedCls}${reviewCls}"
             data-type="${escapeHtml(typeInfo.name)}"
             data-type-id="${marker.typeId}"
             data-marker="${marker.id}"
             title="${escapeHtml(title)}"
-            style="${styleStr}background:${color};"></span>
+            style="${styleStr}background:${color};">
+        ${reviewIndicator}
+      </span>
     `;
   }
 
@@ -779,10 +798,30 @@
     renderMarkers();
   }
 
+  function getStatusBadgeClass(status) {
+    const map = {
+      pending: "pending",
+      passed: "passed",
+      doubtful: "doubtful",
+      rejected: "rejected",
+    };
+    return map[status] || "pending";
+  }
+
+  function getStatusLabel(status) {
+    const labels = {
+      pending: "待复核",
+      passed: "已通过",
+      doubtful: "存疑",
+      rejected: "已退回",
+    };
+    return labels[status] || "待复核";
+  }
+
   function renderStats() {
     const page = State.currentPage;
     const countsRes = State.getMarkerCounts(page);
-    const { byId, types } = countsRes;
+    const { byId, types, reviewCounts } = countsRes;
     const total = page ? page.markers.length : 0;
 
     const rows = types
@@ -797,7 +836,28 @@
         ? `<div class="stat total-row"><span>本页合计</span><strong>${total}</strong></div>`
         : "";
 
-    Doms.stats.innerHTML = rows + totalRow;
+    let reviewHtml = "";
+    if (reviewCounts && (reviewCounts.passed > 0 || reviewCounts.doubtful > 0 || reviewCounts.rejected > 0)) {
+      reviewHtml = `
+        <div class="stats-review-section">
+          <div class="stats-review-title">复核状态</div>
+          <div class="stats-review-row">
+            <span class="review-status-badge passed">已通过 ${reviewCounts.passed}</span>
+            <span class="review-status-badge doubtful">存疑 ${reviewCounts.doubtful}</span>
+            <span class="review-status-badge rejected">已退回 ${reviewCounts.rejected}</span>
+          </div>
+          <div class="stats-review-progress">
+            <div class="review-progress-bar">
+              <div class="review-progress-fill passed" style="width:${total > 0 ? (reviewCounts.passed / total * 100) : 0}%;"></div>
+              <div class="review-progress-fill doubtful" style="width:${total > 0 ? (reviewCounts.doubtful / total * 100) : 0}%;"></div>
+              <div class="review-progress-fill rejected" style="width:${total > 0 ? (reviewCounts.rejected / total * 100) : 0}%;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    Doms.stats.innerHTML = rows + totalRow + reviewHtml;
 
     if (State.pages.length > 1) {
       const totalCounts = State.getTotalCounts();
@@ -808,10 +868,34 @@
           return `<div class="stat"><span><span class="stat-dot" style="background:${t.color};"></span>${escapeHtml(t.name)}</span><strong>${count}</strong></div>`;
         })
         .join("");
+
+      let totalReviewHtml = "";
+      const totalReviewCounts = totalCounts.reviewCounts;
+      if (totalReviewCounts && (totalReviewCounts.passed > 0 || totalReviewCounts.doubtful > 0 || totalReviewCounts.rejected > 0)) {
+        totalReviewHtml = `
+          <div class="stats-review-section">
+            <div class="stats-review-title">全卷复核状态</div>
+            <div class="stats-review-row">
+              <span class="review-status-badge passed">已通过 ${totalReviewCounts.passed}</span>
+              <span class="review-status-badge doubtful">存疑 ${totalReviewCounts.doubtful}</span>
+              <span class="review-status-badge rejected">已退回 ${totalReviewCounts.rejected}</span>
+            </div>
+            <div class="stats-review-progress">
+              <div class="review-progress-bar">
+                <div class="review-progress-fill passed" style="width:${allTotal > 0 ? (totalReviewCounts.passed / allTotal * 100) : 0}%;"></div>
+                <div class="review-progress-fill doubtful" style="width:${allTotal > 0 ? (totalReviewCounts.doubtful / allTotal * 100) : 0}%;"></div>
+                <div class="review-progress-fill rejected" style="width:${allTotal > 0 ? (totalReviewCounts.rejected / allTotal * 100) : 0}%;"></div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       Doms.statsTotal.innerHTML = `
         <div class="stats-total-title">全卷合计</div>
         ${totalRows}
         <div class="stat total-row"><span>${State.pages.length} 页总计</span><strong>${allTotal}</strong></div>
+        ${totalReviewHtml}
       `;
     } else {
       Doms.statsTotal.innerHTML = "";
@@ -879,10 +963,21 @@
           coords = `<br /><span style="font-family:'SF Mono',Monaco,Consolas,monospace;font-size:11px;">坐标：(${marker.realX}, ${marker.realY}) px</span>`;
         }
 
+        let reviewTag = "";
+        let reviewComment = "";
+        if (marker.review && marker.review.status && marker.review.status !== "pending") {
+          const statusCls = getStatusBadgeClass(marker.review.status);
+          const statusLabel = getStatusLabel(marker.review.status);
+          reviewTag = `<span class="record-mode review-status ${statusCls}">${statusLabel}</span>`;
+          if (marker.review.comment) {
+            reviewComment = `<br /><span class="review-comment" title="复核意见">💬 ${escapeHtml(marker.review.comment)}</span>`;
+          }
+        }
+
         return `
           <article class="record${selectedCls}" data-marker="${marker.id}">
-            <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}${migrTag}</strong>
-            <p>${note}${dims}${coords}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
+            <strong><span class="stat-dot" style="background:${typeInfo.color};"></span>${index + 1}. ${escapeHtml(typeInfo.name)}${modeTag}${migrTag}${reviewTag}</strong>
+            <p>${note}${dims}${coords}${reviewComment}<br /><span style="font-size:12px;opacity:.6;">${escapeHtml(time)}</span></p>
             <button type="button" data-delete="${marker.id}">删除</button>
           </article>
         `;
