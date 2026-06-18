@@ -1581,6 +1581,7 @@
 
   function handlePageChange() {
     if (!CandidateManager) return;
+    if (window._restoringHistory) return;
     const currentPageId = State.currentPage ? State.currentPage.id : null;
     if (currentPageId !== lastPageId) {
       if (lastPageId) {

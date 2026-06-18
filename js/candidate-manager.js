@@ -294,6 +294,42 @@
     return state.filter;
   }
 
+  function restoreState(savedState) {
+    if (!savedState || typeof savedState !== "object") return false;
+    if (savedState.candidates !== undefined) {
+      state.candidates = Array.isArray(savedState.candidates)
+        ? savedState.candidates.map(function (c) {
+            var conf = Number(c.confidence);
+            return {
+              ...c,
+              status: c.status || CANDIDATE_STATUS.PENDING,
+              confidence: isNaN(conf) ? 0.5 : Math.max(0, Math.min(1, conf)),
+            };
+          })
+        : [];
+    }
+    if (savedState.pageId !== undefined) {
+      state.pageId = savedState.pageId;
+    }
+    if (savedState.filter !== undefined && ["all", "pending", "accepted", "ignored"].includes(savedState.filter)) {
+      state.filter = savedState.filter;
+    }
+    if (savedState.sensitivity !== undefined) {
+      state.sensitivity = Math.max(1, Math.min(100, Number(savedState.sensitivity) || DEFAULT_SENSITIVITY));
+    }
+    if (savedState.detectEdge !== undefined) {
+      state.detectEdge = Boolean(savedState.detectEdge);
+    }
+    if (savedState.maxCandidates !== undefined) {
+      state.maxCandidates = Math.max(10, Math.min(500, Number(savedState.maxCandidates) || 200));
+    }
+    if (savedState.lastDetectResult !== undefined) {
+      state.lastDetectResult = savedState.lastDetectResult;
+    }
+    _notify();
+    return true;
+  }
+
   function clearAccepted() {
     state.candidates = state.candidates.filter(
       (c) => c.status !== CANDIDATE_STATUS.ACCEPTED
@@ -341,6 +377,7 @@
     getTypeLabel,
     setFilter,
     getFilter,
+    restoreState,
 
     get sensitivity() {
       return state.sensitivity;
@@ -359,6 +396,9 @@
     },
     get lastDetectResult() {
       return state.lastDetectResult;
+    },
+    get pageId() {
+      return state.pageId;
     },
   };
 

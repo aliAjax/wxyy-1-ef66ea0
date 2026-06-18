@@ -342,11 +342,11 @@
     _restoreState: function (stateSnapshot) {
       if (!stateSnapshot) return false;
       this._suppressRecording = true;
+      global._restoringHistory = true;
       try {
         if (stateSnapshot.volumeState && global.VolumeState) {
           global.VolumeStorage.save(stateSnapshot.volumeState);
           global.VolumeState._state = global.VolumeStorage.load();
-          global.VolumeState._notify();
         }
 
         if (stateSnapshot.taskQueueState && global.TaskQueue) {
@@ -363,25 +363,28 @@
           } catch (e) {
             global.TaskQueue._state = JSON.parse(JSON.stringify(DEFAULT_TASK_STATE_FALLBACK));
           }
-          global.TaskQueue._notify();
         }
 
         if (stateSnapshot.candidateState && global.CandidateManager) {
-          var cs = stateSnapshot.candidateState;
-          if (cs.candidates) {
-            global.CandidateManager.setCandidates(cs.candidates);
-          }
-          if (cs.filter) {
-            global.CandidateManager.setFilter(cs.filter);
-          }
-          if (cs.sensitivity !== undefined) {
-            global.CandidateManager.setSensitivity(cs.sensitivity);
-          }
-          if (cs.detectEdge !== undefined) {
-            global.CandidateManager.setDetectEdge(cs.detectEdge);
-          }
-          if (cs.maxCandidates !== undefined) {
-            global.CandidateManager.setMaxCandidates(cs.maxCandidates);
+          if (typeof global.CandidateManager.restoreState === "function") {
+            global.CandidateManager.restoreState(stateSnapshot.candidateState);
+          } else {
+            var cs = stateSnapshot.candidateState;
+            if (cs.candidates) {
+              global.CandidateManager.setCandidates(cs.candidates);
+            }
+            if (cs.filter) {
+              global.CandidateManager.setFilter(cs.filter);
+            }
+            if (cs.sensitivity !== undefined) {
+              global.CandidateManager.setSensitivity(cs.sensitivity);
+            }
+            if (cs.detectEdge !== undefined) {
+              global.CandidateManager.setDetectEdge(cs.detectEdge);
+            }
+            if (cs.maxCandidates !== undefined) {
+              global.CandidateManager.setMaxCandidates(cs.maxCandidates);
+            }
           }
         }
 
@@ -389,17 +392,22 @@
           global.CalibrationUI.restoreExportData(stateSnapshot.calibrationState);
         }
 
-        if (stateSnapshot.candidatesVisible !== undefined && global.VolumeRender) {
+        if (stateSnapshot.candidatesVisible !== undefined) {
           global._candidatesVisible = stateSnapshot.candidatesVisible;
           if (typeof candidatesVisible !== "undefined") {
             candidatesVisible = stateSnapshot.candidatesVisible;
           }
-          global.VolumeRender.refresh();
-        } else if (stateSnapshot.candidatesVisible !== undefined) {
-          global._candidatesVisible = stateSnapshot.candidatesVisible;
-          if (typeof candidatesVisible !== "undefined") {
-            candidatesVisible = stateSnapshot.candidatesVisible;
-          }
+        }
+
+        if (typeof lastPageId !== "undefined" && stateSnapshot.volumeState) {
+          lastPageId = stateSnapshot.volumeState.currentPageId || null;
+        }
+
+        if (global.VolumeState) {
+          global.VolumeState._notify();
+        }
+        if (global.TaskQueue) {
+          global.TaskQueue._notify();
         }
 
         if (global.VolumeRender) {
@@ -412,6 +420,7 @@
         return false;
       } finally {
         this._suppressRecording = false;
+        global._restoringHistory = false;
       }
     },
 

@@ -337,6 +337,29 @@
       return true;
     },
 
+    removeTasksByPageId: function (pageId) {
+      if (!pageId) return 0;
+      var removed = 0;
+      var activeMatched = false;
+      for (var i = this._state.tasks.length - 1; i >= 0; i--) {
+        if (this._state.tasks[i].pageId === pageId) {
+          if (this._state.activeTaskId === this._state.tasks[i].id) {
+            activeMatched = true;
+          }
+          this._state.tasks.splice(i, 1);
+          removed++;
+        }
+      }
+      if (removed > 0) {
+        if (activeMatched) {
+          this._state.activeTaskId = this._state.tasks.length > 0 ? this._state.tasks[0].id : null;
+        }
+        this._persist();
+        this._notify();
+      }
+      return removed;
+    },
+
     setActive: function (taskId) {
       var task = this._state.tasks.find(function (t) { return t.id === taskId; });
       if (!task) return false;

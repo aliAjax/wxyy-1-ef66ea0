@@ -238,6 +238,11 @@
           this._state.currentPageId = null;
         }
       }
+      if (global.TaskQueue && typeof global.TaskQueue.removeTasksByPageId === "function") {
+        try {
+          global.TaskQueue.removeTasksByPageId(pageId);
+        } catch (e) {}
+      }
       this._touchCurrentPage();
       this._persist();
       this._notify();
