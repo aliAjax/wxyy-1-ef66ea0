@@ -689,16 +689,47 @@
         const baseState = window.ProjectPackage.packageToState(baseData);
 
         if (baseState.pages && Array.isArray(baseState.pages)) {
+          while (baseState.pages.length < mergedPages.length) {
+            baseState.pages.push(null);
+          }
+
           mergedPages.forEach((mp) => {
             const pageIdx = mp.pageIndex;
+            const cleanedMarkers = mp.markers.map(({
+              _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
+              _center, _type, _note, ...rest
+            }) => rest);
+
             if (baseState.pages[pageIdx]) {
-              baseState.pages[pageIdx].markers = mp.markers.map(({
-                _mergeSource, _mergeIndex, _mergedNote, _conflict, _conflictData,
-                _center, _type, _note, ...rest
-              }) => rest);
+              baseState.pages[pageIdx].markers = cleanedMarkers;
               baseState.pages[pageIdx].updatedAt = new Date().toISOString();
+            } else {
+              const sourcePage = mp.pageDataA || mp.pageDataB;
+              if (sourcePage) {
+                baseState.pages[pageIdx] = {
+                  id: sourcePage.id || `page-${pageIdx + 1}`,
+                  name: sourcePage.name || mp.pageName || `第${pageIdx + 1}页`,
+                  fileName: sourcePage.fileName || `page_${String(pageIdx + 1).padStart(3, '0')}.jpg`,
+                  image: sourcePage.image || null,
+                  markers: cleanedMarkers,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+              } else {
+                baseState.pages[pageIdx] = {
+                  id: `page-${pageIdx + 1}`,
+                  name: mp.pageName || `第${pageIdx + 1}页`,
+                  fileName: `page_${String(pageIdx + 1).padStart(3, '0')}.jpg`,
+                  image: null,
+                  markers: cleanedMarkers,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+              }
             }
           });
+
+          baseState.pages = baseState.pages.filter(p => p !== null);
         }
 
         baseState.updatedAt = new Date().toISOString();
@@ -741,9 +772,29 @@
     }
 
     const exportPages = mergedPages.map((mp) => {
-      const basePage = baseData.pages && baseData.pages[mp.pageIndex]
-        ? baseData.pages[mp.pageIndex]
-        : {};
+      let basePage = {};
+      if (baseData.pages && baseData.pages[mp.pageIndex]) {
+        basePage = baseData.pages[mp.pageIndex];
+      } else {
+        const sourcePage = mp.pageDataA || mp.pageDataB;
+        if (sourcePage) {
+          basePage = {
+            id: sourcePage.id || `page-${mp.pageIndex + 1}`,
+            name: sourcePage.name || mp.pageName || `第${mp.pageIndex + 1}页`,
+            fileName: sourcePage.fileName || `page_${String(mp.pageIndex + 1).padStart(3, '0')}.jpg`,
+            image: sourcePage.image || null,
+            createdAt: new Date().toISOString(),
+          };
+        } else {
+          basePage = {
+            id: `page-${mp.pageIndex + 1}`,
+            name: mp.pageName || `第${mp.pageIndex + 1}页`,
+            fileName: `page_${String(mp.pageIndex + 1).padStart(3, '0')}.jpg`,
+            image: null,
+            createdAt: new Date().toISOString(),
+          };
+        }
+      }
       return {
         ...basePage,
         markers: mp.markers.map(({

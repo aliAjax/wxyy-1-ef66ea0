@@ -400,8 +400,24 @@
         pageIndex: pr.pageIndex,
         pageInfoA: pr.pageInfoA,
         pageInfoB: pr.pageInfoB,
+        imageA: pr.imageA,
+        imageB: pr.imageB,
+        existsA: pr.existsA,
+        existsB: pr.existsB,
         markers: merged,
         pageName: pr.pageName,
+        pageDataA: pr.pageInfoA ? {
+          id: pr.pageInfoA.id,
+          name: pr.pageInfoA.name,
+          fileName: pr.pageInfoA.fileName,
+          image: pr.imageA,
+        } : null,
+        pageDataB: pr.pageInfoB ? {
+          id: pr.pageInfoB.id,
+          name: pr.pageInfoB.name,
+          fileName: pr.pageInfoB.fileName,
+          image: pr.imageB,
+        } : null,
       };
     });
   }
