@@ -100,7 +100,60 @@
     keyword: "",
   };
   let selectedMarkerId = null;
-  let selectedMarkerIds = new Set();
+  let selectedMarkerIdsByPage = new Map();
+  let lastActivePageId = null;
+
+  function _getCurrentPageSelectionSet() {
+    const page = State.currentPage;
+    if (!page) return new Set();
+    if (!selectedMarkerIdsByPage.has(page.id)) {
+      selectedMarkerIdsByPage.set(page.id, new Set());
+    }
+    return selectedMarkerIdsByPage.get(page.id);
+  }
+
+  function _getAllSelectedMarkerIds() {
+    const result = [];
+    for (const [, set] of selectedMarkerIdsByPage) {
+      for (const id of set) result.push(id);
+    }
+    return result;
+  }
+
+  function _getTotalSelectedCount() {
+    let count = 0;
+    for (const [, set] of selectedMarkerIdsByPage) {
+      count += set.size;
+    }
+    return count;
+  }
+
+  function _getSelectedPagesCount() {
+    let count = 0;
+    for (const [, set] of selectedMarkerIdsByPage) {
+      if (set.size > 0) count++;
+    }
+    return count;
+  }
+
+  function _cleanupDeletedSelections() {
+    for (const page of State.pages) {
+      if (!selectedMarkerIdsByPage.has(page.id)) continue;
+      const set = selectedMarkerIdsByPage.get(page.id);
+      const validIds = new Set(page.markers.map((m) => m.id));
+      for (const id of Array.from(set)) {
+        if (!validIds.has(id)) set.delete(id);
+      }
+      if (set.size === 0) {
+        selectedMarkerIdsByPage.delete(page.id);
+      }
+    }
+    for (const pageId of Array.from(selectedMarkerIdsByPage.keys())) {
+      if (!State.pages.some((p) => p.id === pageId)) {
+        selectedMarkerIdsByPage.delete(pageId);
+      }
+    }
+  }
 
   function initDoms() {
     Doms.volumeId = document.getElementById("volumeId");
@@ -284,10 +337,15 @@
   }
 
   function toggleMarkerSelection(markerId) {
-    if (selectedMarkerIds.has(markerId)) {
-      selectedMarkerIds.delete(markerId);
+    const set = _getCurrentPageSelectionSet();
+    if (set.has(markerId)) {
+      set.delete(markerId);
+      if (set.size === 0) {
+        const page = State.currentPage;
+        if (page) selectedMarkerIdsByPage.delete(page.id);
+      }
     } else {
-      selectedMarkerIds.add(markerId);
+      set.add(markerId);
     }
     renderMarkers();
     renderMarkerList();
@@ -295,62 +353,97 @@
   }
 
   function selectAllFilteredMarkers() {
+    const set = _getCurrentPageSelectionSet();
     const filtered = getFilteredMarkers();
-    filtered.forEach((m) => selectedMarkerIds.add(m.id));
+    filtered.forEach((m) => set.add(m.id));
     renderMarkers();
     renderMarkerList();
     updateBatchSelectionUI();
   }
 
-  function selectMarkersByType(typeId) {
-    const page = State.currentPage;
-    if (!page || !typeId) return;
-    const filtered = getFilteredMarkers();
-    filtered.forEach((m) => {
-      if (m.typeId === typeId) {
-        selectedMarkerIds.add(m.id);
-      }
-    });
+  function selectMarkersByType(typeId, scope) {
+    const useScope = scope === "all" ? "all" : "current";
+    if (useScope === "all") {
+      const allPages = State.pages || [];
+      allPages.forEach((page) => {
+        if (!page.markers) return;
+        let set = selectedMarkerIdsByPage.get(page.id);
+        if (!set) {
+          set = new Set();
+          selectedMarkerIdsByPage.set(page.id, set);
+        }
+        page.markers.forEach((m) => {
+          if (m.typeId === typeId) set.add(m.id);
+        });
+        if (set.size === 0) selectedMarkerIdsByPage.delete(page.id);
+      });
+    } else {
+      const page = State.currentPage;
+      if (!page || !typeId) return;
+      const set = _getCurrentPageSelectionSet();
+      const filtered = getFilteredMarkers();
+      filtered.forEach((m) => {
+        if (m.typeId === typeId) set.add(m.id);
+      });
+      if (set.size === 0 && page) selectedMarkerIdsByPage.delete(page.id);
+    }
     renderMarkers();
     renderMarkerList();
     updateBatchSelectionUI();
   }
 
   function clearMarkerSelection() {
-    selectedMarkerIds.clear();
+    selectedMarkerIdsByPage.clear();
     renderMarkers();
     renderMarkerList();
     updateBatchSelectionUI();
   }
 
   function getSelectedMarkerIds() {
-    return Array.from(selectedMarkerIds);
+    return _getAllSelectedMarkerIds();
+  }
+
+  function clearCurrentPageSelection() {
+    const page = State.currentPage;
+    if (page) selectedMarkerIdsByPage.delete(page.id);
+    renderMarkers();
+    renderMarkerList();
+    updateBatchSelectionUI();
   }
 
   function updateBatchSelectionUI() {
     if (!Doms.batchSelectionBar) return;
     const page = State.currentPage;
-    const hasMarkers = page && page.markers.length > 0;
-    const count = selectedMarkerIds.size;
+    const hasAnyMarkers = (State.pages || []).some((p) => p.markers && p.markers.length > 0);
+    const totalCount = _getTotalSelectedCount();
+    const pageCount = _getSelectedPagesCount();
+    const currentSet = page ? (selectedMarkerIdsByPage.get(page.id) || new Set()) : new Set();
+    const currentCount = currentSet.size;
 
-    if (hasMarkers) {
+    if (hasAnyMarkers) {
       Doms.batchSelectionBar.style.display = "block";
     } else {
       Doms.batchSelectionBar.style.display = "none";
     }
 
     if (Doms.batchSelectedCount) {
-      Doms.batchSelectedCount.textContent = `已选 ${count} 条`;
+      if (pageCount > 1) {
+        Doms.batchSelectedCount.textContent = `已选 ${totalCount} 条（跨 ${pageCount} 页）`;
+      } else if (currentCount > 0) {
+        Doms.batchSelectedCount.textContent = `已选 ${currentCount} 条`;
+      } else {
+        Doms.batchSelectedCount.textContent = `已选 0 条`;
+      }
     }
 
     if (Doms.selectAllMarkers) {
       const filtered = getFilteredMarkers();
-      const allSelected = filtered.length > 0 && filtered.every((m) => selectedMarkerIds.has(m.id));
-      Doms.selectAllMarkers.checked = allSelected;
-      Doms.selectAllMarkers.indeterminate = count > 0 && !allSelected;
+      const allCurrentSelected = filtered.length > 0 && filtered.every((m) => currentSet.has(m.id));
+      Doms.selectAllMarkers.checked = allCurrentSelected;
+      Doms.selectAllMarkers.indeterminate = currentCount > 0 && !allCurrentSelected;
     }
 
-    const hasSelection = count > 0;
+    const hasSelection = totalCount > 0;
     if (Doms.batchTypeSelect) Doms.batchTypeSelect.disabled = !hasSelection;
     if (Doms.batchNoteInput) Doms.batchNoteInput.disabled = !hasSelection;
     if (Doms.batchAppendNoteBtn) Doms.batchAppendNoteBtn.disabled = !hasSelection;
@@ -364,14 +457,15 @@
       const prevValue = Doms.selectByType.value;
       Doms.selectByType.innerHTML =
         '<option value="">按类型选择…</option>' +
+        '<option value="" disabled>—— 本页范围 ——</option>' +
         types
-          .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`)
+          .map((t) => `<option value="current:${escapeHtml(t.id)}">本页 · ${escapeHtml(t.name)}</option>`)
+          .join("") +
+        '<option value="" disabled>—— 全册范围 ——</option>' +
+        types
+          .map((t) => `<option value="all:${escapeHtml(t.id)}">全册 · ${escapeHtml(t.name)}</option>`)
           .join("");
-      if (prevValue && types.some((t) => t.id === prevValue)) {
-        Doms.selectByType.value = prevValue;
-      } else {
-        Doms.selectByType.value = "";
-      }
+      Doms.selectByType.value = prevValue || "";
     }
 
     if (Doms.batchTypeSelect) {
@@ -673,7 +767,8 @@
 
     const migrCls = marker.migrated ? " migrated" : "";
     const selectedCls = marker.id === selectedMarkerId ? " selected" : "";
-    const batchSelectedCls = selectedMarkerIds.has(marker.id) ? " batch-selected" : "";
+    const currentSet = _getCurrentPageSelectionSet();
+    const batchSelectedCls = currentSet.has(marker.id) ? " batch-selected" : "";
 
     if (marker.mode === "region") {
       return `
@@ -1075,7 +1170,8 @@
           ? '<span class="record-mode mode-migrated">迁移</span>'
           : '';
         const isSelected = marker.id === selectedMarkerId;
-        const isBatchSelected = selectedMarkerIds.has(marker.id);
+        const currSet = _getCurrentPageSelectionSet();
+        const isBatchSelected = currSet.has(marker.id);
         const selectedCls = isSelected ? ' selected' : '';
         const batchSelectedCls = isBatchSelected ? ' batch-selected' : '';
 
@@ -1348,16 +1444,7 @@
     if (!page) {
       selectedMarkerId = null;
     }
-    if (page) {
-      const validIds = new Set(page.markers.map((m) => m.id));
-      for (const id of Array.from(selectedMarkerIds)) {
-        if (!validIds.has(id)) {
-          selectedMarkerIds.delete(id);
-        }
-      }
-    } else {
-      selectedMarkerIds.clear();
-    }
+    _cleanupDeletedSelections();
     renderTypeInput();
     renderFilterTypeOptions();
     renderBatchTypeOptions();
@@ -1671,7 +1758,9 @@
     selectAllFilteredMarkers,
     selectMarkersByType,
     clearMarkerSelection,
+    clearCurrentPageSelection,
     getSelectedMarkerIds,
+    getSelectedPagesCount: _getSelectedPagesCount,
     updateBatchSelectionUI,
     renderBatchTypeOptions,
     Doms,

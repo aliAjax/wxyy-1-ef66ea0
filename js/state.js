@@ -373,11 +373,47 @@
       return marker;
     },
 
+    findPageByMarkerId(markerId) {
+      if (!markerId) return null;
+      for (const p of this._state.pages) {
+        if (p.markers && p.markers.some((m) => m.id === markerId)) {
+          return p;
+        }
+      }
+      return null;
+    },
+
+    findMarkerById(markerId) {
+      const p = this.findPageByMarkerId(markerId);
+      if (!p) return null;
+      return p.markers.find((m) => m.id === markerId) || null;
+    },
+
+    getMarkersByTypeId(typeId, scope) {
+      const list = [];
+      const pages = scope === "all" ? this._state.pages : (this.currentPage ? [this.currentPage] : []);
+      for (const p of pages) {
+        if (!p.markers) continue;
+        for (const m of p.markers) {
+          if (m.typeId === typeId) list.push({ marker: m, page: p });
+        }
+      }
+      return list;
+    },
+
     batchUpdateMarkers(markerIds, updates) {
-      const page = this.currentPage;
-      if (!page || !Array.isArray(markerIds) || markerIds.length === 0) return 0;
+      if (!Array.isArray(markerIds) || markerIds.length === 0) return 0;
       const idSet = new Set(markerIds);
-      let count = 0;
+      const pageMap = new Map();
+      for (const p of this._state.pages) {
+        if (!p.markers) continue;
+        for (const m of p.markers) {
+          if (idSet.has(m.id)) {
+            if (!pageMap.has(p.id)) pageMap.set(p.id, { page: p, markers: [] });
+            pageMap.get(p.id).markers.push(m);
+          }
+        }
+      }
 
       let resolvedTypeId = null;
       let resolvedTypeName = null;
@@ -393,24 +429,31 @@
         }
       }
 
-      page.markers.forEach((m) => {
-        if (!idSet.has(m.id)) return;
-        if (resolvedTypeId) {
-          m.typeId = resolvedTypeId;
-          if (resolvedTypeName) m.type = resolvedTypeName;
+      let count = 0;
+      let touchedAnyPage = false;
+      for (const [, entry] of pageMap) {
+        const { page, markers } = entry;
+        for (const m of markers) {
+          if (resolvedTypeId) {
+            m.typeId = resolvedTypeId;
+            if (resolvedTypeName) m.type = resolvedTypeName;
+          }
+          if (updates.note !== undefined) {
+            m.note = String(updates.note).trim();
+          }
+          if (updates.appendNote !== undefined && updates.appendNote.trim()) {
+            const appendText = String(updates.appendNote).trim();
+            m.note = m.note ? m.note + "；" + appendText : appendText;
+          }
+          count++;
         }
-        if (updates.note !== undefined) {
-          m.note = String(updates.note).trim();
+        if (markers.length > 0) {
+          page.updatedAt = new Date().toISOString();
+          touchedAnyPage = true;
         }
-        if (updates.appendNote !== undefined && updates.appendNote.trim()) {
-          const appendText = String(updates.appendNote).trim();
-          m.note = m.note ? m.note + "；" + appendText : appendText;
-        }
-        count++;
-      });
+      }
 
-      if (count > 0) {
-        page.updatedAt = new Date().toISOString();
+      if (touchedAnyPage) {
         this._persist();
         this._notify();
       }
@@ -418,14 +461,22 @@
     },
 
     batchRemoveMarkers(markerIds) {
-      const page = this.currentPage;
-      if (!page || !Array.isArray(markerIds) || markerIds.length === 0) return 0;
+      if (!Array.isArray(markerIds) || markerIds.length === 0) return 0;
       const idSet = new Set(markerIds);
-      const before = page.markers.length;
-      page.markers = page.markers.filter((m) => !idSet.has(m.id));
-      const removed = before - page.markers.length;
-      if (removed > 0) {
-        page.updatedAt = new Date().toISOString();
+      let removed = 0;
+      let touchedAnyPage = false;
+      for (const p of this._state.pages) {
+        if (!p.markers) continue;
+        const before = p.markers.length;
+        p.markers = p.markers.filter((m) => !idSet.has(m.id));
+        const delta = before - p.markers.length;
+        if (delta > 0) {
+          removed += delta;
+          p.updatedAt = new Date().toISOString();
+          touchedAnyPage = true;
+        }
+      }
+      if (touchedAnyPage) {
         this._persist();
         this._notify();
       }

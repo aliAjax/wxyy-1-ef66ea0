@@ -2675,6 +2675,49 @@
     TaskQueue.syncFromPage(page.id, pageData);
   }
 
+  function syncPagesToTaskQueue(pageIds) {
+    if (!TaskQueue || !pageIds || pageIds.length === 0) return;
+    var idSet = new Set(pageIds);
+    for (const page of State.pages) {
+      if (!idSet.has(page.id)) continue;
+      var pageData = {
+        image: page.image,
+        markers: page.markers,
+        damageTypes: State.damageTypes,
+        candidateSummary: page.candidateSummary || null,
+      };
+      TaskQueue.syncFromPage(page.id, pageData);
+    }
+  }
+
+  function syncAllPagesToTaskQueue() {
+    if (!TaskQueue) return;
+    for (const page of State.pages) {
+      var pageData = {
+        image: page.image,
+        markers: page.markers,
+        damageTypes: State.damageTypes,
+        candidateSummary: page.candidateSummary || null,
+      };
+      TaskQueue.syncFromPage(page.id, pageData);
+    }
+  }
+
+  function getPageIdsFromMarkerIds(markerIds) {
+    var idSet = new Set(markerIds);
+    var pageIdSet = new Set();
+    for (const page of State.pages) {
+      if (!page.markers) continue;
+      for (const m of page.markers) {
+        if (idSet.has(m.id)) {
+          pageIdSet.add(page.id);
+          break;
+        }
+      }
+    }
+    return Array.from(pageIdSet);
+  }
+
   function syncDamageTypesToActiveTask() {
     TaskQueue.syncDamageTypesFromState(State);
   }
@@ -3159,9 +3202,24 @@
 
     if (selectByType) {
       selectByType.addEventListener("change", function () {
-        var typeId = selectByType.value;
+        var rawValue = selectByType.value;
+        if (!rawValue) return;
+        var colonIdx = rawValue.indexOf(":");
+        if (colonIdx === -1) {
+          selectByType.value = "";
+          return;
+        }
+        var scope = rawValue.slice(0, colonIdx);
+        var typeId = rawValue.slice(colonIdx + 1);
         if (typeId) {
-          Render.selectMarkersByType(typeId);
+          Render.selectMarkersByType(typeId, scope);
+          var selCount = Render.getSelectedMarkerIds().length;
+          var pageCount = Render.getSelectedPagesCount ? Render.getSelectedPagesCount() : 1;
+          if (pageCount > 1) {
+            showToast("已跨 " + pageCount + " 页选中 " + selCount + " 条标记", "success");
+          } else {
+            showToast("已选中 " + selCount + " 条标记", "success");
+          }
         }
         selectByType.value = "";
       });
@@ -3169,7 +3227,11 @@
 
     if (clearSelectionBtn) {
       clearSelectionBtn.addEventListener("click", function () {
+        var pageCount = Render.getSelectedPagesCount ? Render.getSelectedPagesCount() : 0;
         Render.clearMarkerSelection();
+        if (pageCount > 1) {
+          showToast("已清除跨 " + pageCount + " 页的选择", "info");
+        }
       });
     }
 
@@ -3183,8 +3245,16 @@
           batchTypeSelect.value = "";
           return;
         }
+        var affectedPageIds = getPageIdsFromMarkerIds(selectedIds);
+        var typeInfo = State.findTypeById ? State.findTypeById(typeId) : null;
+        var typeName = typeInfo ? typeInfo.name : ("类型#" + typeId.slice(0, 6));
         State.batchUpdateMarkers(selectedIds, { typeId: typeId });
-        showToast("已修改 " + selectedIds.length + " 条标记的类型", "success");
+        if (affectedPageIds.length > 1) {
+          syncPagesToTaskQueue(affectedPageIds);
+          showToast("已跨 " + affectedPageIds.length + " 页修改 " + selectedIds.length + " 条标记为「" + typeName + "」", "success");
+        } else {
+          showToast("已修改 " + selectedIds.length + " 条标记的类型为「" + typeName + "」", "success");
+        }
         batchTypeSelect.value = "";
       });
     }
@@ -3201,8 +3271,14 @@
           showToast("请先选择要追加备注的标记", "warning");
           return;
         }
+        var affectedPageIds = getPageIdsFromMarkerIds(selectedIds);
         State.appendNoteToMarkers(selectedIds, noteText);
-        showToast("已为 " + selectedIds.length + " 条标记追加备注", "success");
+        if (affectedPageIds.length > 1) {
+          syncPagesToTaskQueue(affectedPageIds);
+          showToast("已跨 " + affectedPageIds.length + " 页为 " + selectedIds.length + " 条标记追加备注", "success");
+        } else {
+          showToast("已为 " + selectedIds.length + " 条标记追加备注", "success");
+        }
         batchNoteInput.value = "";
       });
     }
@@ -3214,12 +3290,24 @@
           showToast("请先选择要删除的标记", "warning");
           return;
         }
-        if (!confirm("确定要删除选中的 " + selectedIds.length + " 条标记吗？此操作不可撤销。")) {
+        var affectedPageIds = getPageIdsFromMarkerIds(selectedIds);
+        var crossPage = affectedPageIds.length > 1;
+        var promptMsg = crossPage
+          ? "确定要跨 " + affectedPageIds.length + " 页删除选中的 " + selectedIds.length + " 条标记吗？此操作不可撤销。"
+          : "确定要删除选中的 " + selectedIds.length + " 条标记吗？此操作不可撤销。";
+        if (!confirm(promptMsg)) {
           return;
         }
         State.batchRemoveMarkers(selectedIds);
+        if (crossPage) {
+          syncPagesToTaskQueue(affectedPageIds);
+        }
         Render.clearMarkerSelection();
-        showToast("已删除 " + selectedIds.length + " 条标记", "success");
+        if (crossPage) {
+          showToast("已跨 " + affectedPageIds.length + " 页删除 " + selectedIds.length + " 条标记", "success");
+        } else {
+          showToast("已删除 " + selectedIds.length + " 条标记", "success");
+        }
       });
     }
 

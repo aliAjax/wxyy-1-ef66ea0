@@ -434,6 +434,18 @@
         reviewedAt: m.review.reviewedAt || null,
       };
     }
+    if (m._candidateId) {
+      base._candidateId = String(m._candidateId);
+    }
+    if (m._candidateType) {
+      base._candidateType = String(m._candidateType);
+    }
+    if (m._candidateConfidence !== undefined && m._candidateConfidence !== null) {
+      var confidence = Number(m._candidateConfidence);
+      if (!isNaN(confidence)) {
+        base._candidateConfidence = Number(confidence.toFixed(4));
+      }
+    }
     return base;
   }
 
