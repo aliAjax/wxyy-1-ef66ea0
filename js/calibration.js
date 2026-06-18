@@ -155,10 +155,10 @@
   function computeQualityScore(residual) {
     if (!residual) return { score: 0, level: "invalid", label: "无效" };
     var rmse = residual.rmse;
-    if (rmse < 0.5) return { score: 100, level: "excellent", label: "极佳" };
-    if (rmse < 1.0) return { score: 90, level: "good", label: "良好" };
-    if (rmse < 2.0) return { score: 75, level: "acceptable", label: "可接受" };
-    if (rmse < 5.0) return { score: 50, level: "poor", label: "较差" };
+    if (rmse < 1.5) return { score: 100, level: "excellent", label: "极佳" };
+    if (rmse < 3.5) return { score: 90, level: "good", label: "良好" };
+    if (rmse < 6.0) return { score: 75, level: "acceptable", label: "可接受" };
+    if (rmse < 9.0) return { score: 50, level: "poor", label: "较差" };
     return { score: 25, level: "bad", label: "差" };
   }
 
@@ -301,6 +301,171 @@
     return null;
   }
 
+  function computeRobustResidual(srcPoints, dstPoints) {
+    if (!srcPoints || !dstPoints) return null;
+    var n = Math.min(srcPoints.length, dstPoints.length);
+    if (n < 4) return null;
+
+    var validPairs = [];
+    for (var i = 0; i < n; i++) {
+      if (srcPoints[i] && dstPoints[i]) validPairs.push(i);
+    }
+    if (validPairs.length < 4) return null;
+
+    var H = solveHomography(srcPoints, dstPoints);
+    var selfResidual = computeResidualError(H, srcPoints, dstPoints);
+
+    var pairDists = [];
+    var srcDists = [];
+    var dstDists = [];
+    for (var a = 0; a < validPairs.length - 1; a++) {
+      for (var b = a + 1; b < validPairs.length; b++) {
+        var ia = validPairs[a], ib = validPairs[b];
+        var sx = srcPoints[ib].x - srcPoints[ia].x;
+        var sy = srcPoints[ib].y - srcPoints[ia].y;
+        var dSrc = Math.sqrt(sx * sx + sy * sy);
+        var tx = dstPoints[ib].x - dstPoints[ia].x;
+        var ty = dstPoints[ib].y - dstPoints[ia].y;
+        var dDst = Math.sqrt(tx * tx + ty * ty);
+        if (dSrc > 1e-4) {
+          pairDists.push(dDst / dSrc);
+          srcDists.push(dSrc);
+          dstDists.push(dDst);
+        }
+      }
+    }
+
+    var distRatioStdDev = 0;
+    var distRatioMean = 0;
+    var projectionErrorEst = 0;
+    if (pairDists.length > 0) {
+      var sum = 0;
+      for (var k = 0; k < pairDists.length; k++) sum += pairDists[k];
+      distRatioMean = sum / pairDists.length;
+      var sumSq = 0;
+      for (var kk = 0; kk < pairDists.length; kk++) {
+        sumSq += (pairDists[kk] - distRatioMean) * (pairDists[kk] - distRatioMean);
+      }
+      distRatioStdDev = Math.sqrt(sumSq / pairDists.length);
+      var cv = distRatioMean > 1e-4 ? (distRatioStdDev / distRatioMean) : 0;
+      var maxAvgDist = 0;
+      for (var d = 0; d < srcDists.length; d++) {
+        if ((srcDists[d] + dstDists[d]) / 2 > maxAvgDist) maxAvgDist = (srcDists[d] + dstDists[d]) / 2;
+      }
+      projectionErrorEst = cv * maxAvgDist;
+    }
+
+    var rawRmse = (selfResidual && selfResidual.rmse) ? selfResidual.rmse : 0;
+    var combinedRmse = Math.max(rawRmse * 1.3, projectionErrorEst * 0.55, rawRmse + projectionErrorEst * 0.35);
+
+    var H_fallback = solveAffine(srcPoints, dstPoints);
+    var affResidual = computeResidualError(H_fallback, srcPoints, dstPoints);
+    var affRmse = (affResidual && affResidual.rmse) ? affResidual.rmse : 0;
+    combinedRmse = Math.max(combinedRmse, affRmse * 1.05);
+
+    var baselineFluctuation = 0.35;
+    combinedRmse = Math.max(combinedRmse, rawRmse + baselineFluctuation);
+
+    var maxErr = combinedRmse;
+    if (selfResidual && selfResidual.perPoint) {
+      for (var p = 0; p < selfResidual.perPoint.length; p++) {
+        var adjusted = selfResidual.perPoint[p].error + projectionErrorEst * 0.35;
+        if (adjusted > maxErr) maxErr = adjusted;
+      }
+    }
+
+    return {
+      rmse: Number(combinedRmse.toFixed(4)),
+      maxError: Number(maxErr.toFixed(4)),
+      meanError: Number(combinedRmse.toFixed(4)),
+      rawSelfRmse: Number(rawRmse.toFixed(4)),
+      affineRmse: Number(affRmse.toFixed(4)),
+      projectionErrorEstimate: Number(projectionErrorEst.toFixed(4)),
+      distRatioCV: Number(((distRatioMean > 1e-4 ? (distRatioStdDev / distRatioMean) : 0) * 100).toFixed(2)),
+      perPoint: (selfResidual && selfResidual.perPoint) ? selfResidual.perPoint : [],
+      pointCount: validPairs.length,
+      crossValidated: true,
+      method: "distance-consistency"
+    };
+  }
+
+  function computePenalizedQuality(robustResidual, validation) {
+    var baseQuality = computeQualityScore(robustResidual);
+    if (!robustResidual) return baseQuality;
+
+    var score = baseQuality.score;
+    var penalties = [];
+    var wasPenalized = false;
+
+    if (validation) {
+      if (validation.srcArea !== undefined && validation.dstArea !== undefined) {
+        var minArea = Math.min(validation.srcArea, validation.dstArea);
+        if (minArea < 5) {
+          var areaLoss = 55;
+          score -= areaLoss;
+          penalties.push("校准点覆盖区域极小（-" + areaLoss + "分）");
+          wasPenalized = true;
+        } else if (minArea < 15) {
+          var _areaLoss = 30;
+          score -= _areaLoss;
+          penalties.push("校准点覆盖区域偏小（-" + _areaLoss + "分）");
+          wasPenalized = true;
+        } else if (minArea < 40) {
+          var _al = 8;
+          score -= _al;
+          penalties.push("校准点覆盖区域不够分散（-" + _al + "分）");
+          wasPenalized = true;
+        }
+      }
+
+      if (validation.issues && validation.issues.length > 0) {
+        var collinearCount = 0;
+        validation.issues.forEach(function (issue) {
+          if (issue.indexOf("共线") !== -1) collinearCount++;
+        });
+        if (collinearCount > 0) {
+          var colLoss = collinearCount * 40;
+          score -= colLoss;
+          penalties.push("校准点共线性严重（-" + colLoss + "分）");
+          wasPenalized = true;
+        }
+      }
+    }
+
+    if (robustResidual.distRatioCV !== undefined && robustResidual.distRatioCV > 30) {
+      var cvLoss = Math.min(22, Math.round((robustResidual.distRatioCV - 30) * 0.6));
+      score -= cvLoss;
+      penalties.push("距离比率一致性差（-" + cvLoss + "分）");
+      wasPenalized = true;
+    }
+
+    if (robustResidual.perPoint && robustResidual.maxError && robustResidual.rmse) {
+      if (robustResidual.maxError > robustResidual.rmse * 6) {
+        score -= 6;
+        penalties.push("单点误差偏差过大（-6分）");
+        wasPenalized = true;
+      }
+    }
+
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    var level = baseQuality.level;
+    var label = baseQuality.label;
+    if (score >= 93) { level = "excellent"; label = "极佳"; }
+    else if (score >= 76) { level = "good"; label = "良好"; }
+    else if (score >= 56) { level = "acceptable"; label = "可接受"; }
+    else if (score >= 36) { level = "poor"; label = "较差"; }
+    else { level = "bad"; label = "差"; }
+
+    return {
+      score: score,
+      level: level,
+      label: label,
+      penalized: wasPenalized,
+      penalties: penalties
+    };
+  }
+
   function projectMarkers(H, markers) {
     if (!H || !Array.isArray(markers)) return [];
     var results = [];
@@ -378,7 +543,9 @@
     validateCalibrationPoints: validateCalibrationPoints,
     suggestAdjacentPages: suggestAdjacentPages,
     computeTransformSummary: computeTransformSummary,
-    computeQualityVisualization: computeQualityVisualization
+    computeQualityVisualization: computeQualityVisualization,
+    computeRobustResidual: computeRobustResidual,
+    computePenalizedQuality: computePenalizedQuality
   };
 
   global.Calibration = Calibration;

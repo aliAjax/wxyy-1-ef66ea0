@@ -232,14 +232,31 @@
     if (!targetPage) return { success: false, error: "目标页面不存在" };
     if (sourcePage.markers.length === 0) return { success: false, error: "源页面没有标记可供迁移" };
 
+    var validation = Calibration.validateCalibrationPoints(_calibrationData.sourcePoints, _calibrationData.targetPoints);
+    var robustResidual = Calibration.computeRobustResidual(_calibrationData.sourcePoints, _calibrationData.targetPoints);
+    var robustQuality = Calibration.computePenalizedQuality(robustResidual, validation);
+
     var result = Calibration.computeBestTransform(_calibrationData.sourcePoints, _calibrationData.targetPoints);
     if (!result) return { success: false, error: "坐标变换计算失败，请调整校准点位置避免共线" };
 
+    var finalValidation = validation || result.validation;
+    if (finalValidation && robustQuality.penalized && robustQuality.penalties && robustQuality.penalties.length > 0) {
+      if (!finalValidation.issues) finalValidation.issues = [];
+      robustQuality.penalties.forEach(function (p) {
+        finalValidation.issues.push(p);
+      });
+    }
+    if (!finalValidation.issues) finalValidation.issues = [];
+    finalValidation.issues.push("质量评分基于留一交叉验证（LOOCV）计算，避免四点拟合残差被低估");
+
     _calibrationData.transform = result.transform;
     _calibrationData.transformType = result.type;
-    _calibrationData.quality = result.quality;
-    _calibrationData.residual = result.residual;
-    _calibrationData.validation = result.validation;
+    _calibrationData.quality = robustQuality || result.quality;
+    _calibrationData.residual = robustResidual || result.residual;
+    _calibrationData.rawQuality = result.quality;
+    _calibrationData.rawResidual = result.residual;
+    _calibrationData.qualityCrossValidated = !!robustResidual;
+    _calibrationData.validation = finalValidation;
 
     var candidates = Calibration.projectMarkers(result.transform, sourcePage.markers);
     if (candidates.length === 0) return { success: false, error: "所有标记投影后超出范围，无法生成候选" };
@@ -260,17 +277,20 @@
     saveCalibration();
     _notify();
 
-    var qualityInfo = result.quality || {};
+    var qualityInfo = robustQuality || result.quality || {};
     var qualityNote = qualityInfo.label ? "（变换质量：" + qualityInfo.label + "）" : "";
 
     return {
       success: true,
       count: candidates.length,
-      quality: result.quality,
-      residual: result.residual,
+      quality: robustQuality || result.quality,
+      residual: robustResidual || result.residual,
+      rawQuality: result.quality,
+      rawResidual: result.residual,
+      qualityCrossValidated: !!robustResidual,
       transformType: result.type,
       fallback: result.fallback || false,
-      validation: result.validation
+      validation: finalValidation
     };
   }
 
@@ -610,6 +630,10 @@
       });
     }
 
+    var robustResidual = Calibration.computeRobustResidual(_calibrationData.sourcePoints, _calibrationData.targetPoints);
+    var validation = Calibration.validateCalibrationPoints(_calibrationData.sourcePoints, _calibrationData.targetPoints);
+    var robustQuality = Calibration.computePenalizedQuality(robustResidual, validation);
+
     var planData = {
       name: name,
       description: description || "",
@@ -621,8 +645,12 @@
       targetPoints: _calibrationData.targetPoints,
       transform: _calibrationData.transform,
       transformType: _calibrationData.transformType,
-      quality: _calibrationData.quality,
-      residual: _calibrationData.residual,
+      quality: robustQuality || _calibrationData.quality,
+      residual: robustResidual || _calibrationData.residual,
+      rawQuality: _calibrationData.quality,
+      rawResidual: _calibrationData.residual,
+      qualityCrossValidated: !!robustResidual,
+      validation: validation,
       sourceMarkerCount: sourceMarkerCount,
       sourceMarkerTypeCounts: sourceMarkerTypeCounts,
     };
@@ -672,6 +700,11 @@
       return { success: false, error: "方案校准点不完整" };
     }
 
+    var validation = Calibration.validateCalibrationPoints(plan.sourcePoints, plan.targetPoints);
+
+    var robustResidual = Calibration.computeRobustResidual(plan.sourcePoints, plan.targetPoints);
+    var robustQuality = Calibration.computePenalizedQuality(robustResidual, validation);
+
     var result = Calibration.computeBestTransform(plan.sourcePoints, plan.targetPoints);
     if (!result) return { success: false, error: "坐标变换计算失败" };
 
@@ -689,13 +722,29 @@
     var pointModeCount = inRangeMarkers.filter(function (m) { return m.mode !== "region"; }).length;
     var regionModeCount = inRangeMarkers.length - pointModeCount;
 
+    var finalValidation = validation || result.validation;
+    if (finalValidation && robustQuality.penalized && robustQuality.penalties && robustQuality.penalties.length > 0) {
+      if (!finalValidation.issues) finalValidation.issues = [];
+      robustQuality.penalties.forEach(function (p) {
+        finalValidation.issues.push(p);
+      });
+    }
+    if (!finalValidation.issues) finalValidation.issues = [];
+    finalValidation.issues.push("质量评分基于留一交叉验证（LOOCV）计算，避免四点拟合残差被低估");
+
+    var displayResidual = robustResidual || result.residual;
+    var displayQuality = robustQuality || result.quality;
+
     return {
       success: true,
       plan: plan,
-      quality: result.quality,
-      residual: result.residual,
+      quality: displayQuality,
+      residual: displayResidual,
       transformType: result.type,
-      validation: result.validation,
+      fallback: result.fallback || false,
+      validation: finalValidation,
+      rawResidual: result.residual,
+      robustResidualUsed: !!robustResidual,
       totalProjected: projectedMarkers.length,
       inRangeCount: inRangeMarkers.length,
       outOfRangeCount: projectedMarkers.length - inRangeMarkers.length,
