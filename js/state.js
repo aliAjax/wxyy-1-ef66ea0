@@ -768,6 +768,7 @@
 
       if (result.merged > 0) {
         this._touchCurrentPage();
+        this._persist();
         this._notify();
       }
 
