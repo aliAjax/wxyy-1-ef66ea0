@@ -3249,8 +3249,8 @@
         var typeInfo = State.findTypeById ? State.findTypeById(typeId) : null;
         var typeName = typeInfo ? typeInfo.name : ("类型#" + typeId.slice(0, 6));
         State.batchUpdateMarkers(selectedIds, { typeId: typeId });
+        syncPagesToTaskQueue(affectedPageIds);
         if (affectedPageIds.length > 1) {
-          syncPagesToTaskQueue(affectedPageIds);
           showToast("已跨 " + affectedPageIds.length + " 页修改 " + selectedIds.length + " 条标记为「" + typeName + "」", "success");
         } else {
           showToast("已修改 " + selectedIds.length + " 条标记的类型为「" + typeName + "」", "success");
@@ -3273,8 +3273,8 @@
         }
         var affectedPageIds = getPageIdsFromMarkerIds(selectedIds);
         State.appendNoteToMarkers(selectedIds, noteText);
+        syncPagesToTaskQueue(affectedPageIds);
         if (affectedPageIds.length > 1) {
-          syncPagesToTaskQueue(affectedPageIds);
           showToast("已跨 " + affectedPageIds.length + " 页为 " + selectedIds.length + " 条标记追加备注", "success");
         } else {
           showToast("已为 " + selectedIds.length + " 条标记追加备注", "success");
@@ -3299,9 +3299,7 @@
           return;
         }
         State.batchRemoveMarkers(selectedIds);
-        if (crossPage) {
-          syncPagesToTaskQueue(affectedPageIds);
-        }
+        syncPagesToTaskQueue(affectedPageIds);
         Render.clearMarkerSelection();
         if (crossPage) {
           showToast("已跨 " + affectedPageIds.length + " 页删除 " + selectedIds.length + " 条标记", "success");
