@@ -384,7 +384,7 @@
       distRatioCV: Number(((distRatioMean > 1e-4 ? (distRatioStdDev / distRatioMean) : 0) * 100).toFixed(2)),
       perPoint: (selfResidual && selfResidual.perPoint) ? selfResidual.perPoint : [],
       pointCount: validPairs.length,
-      crossValidated: true,
+      robustEstimated: true,
       method: "distance-consistency"
     };
   }

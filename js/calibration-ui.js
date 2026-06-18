@@ -247,7 +247,7 @@
       });
     }
     if (!finalValidation.issues) finalValidation.issues = [];
-    finalValidation.issues.push("质量评分基于留一交叉验证（LOOCV）计算，避免四点拟合残差被低估");
+    finalValidation.issues.push("质量评分基于距离一致性估计和校准点几何惩罚，避免四点拟合残差被低估");
 
     _calibrationData.transform = result.transform;
     _calibrationData.transformType = result.type;
@@ -255,7 +255,7 @@
     _calibrationData.residual = robustResidual || result.residual;
     _calibrationData.rawQuality = result.quality;
     _calibrationData.rawResidual = result.residual;
-    _calibrationData.qualityCrossValidated = !!robustResidual;
+    _calibrationData.qualityRobustEstimated = !!robustResidual;
     _calibrationData.validation = finalValidation;
 
     var candidates = Calibration.projectMarkers(result.transform, sourcePage.markers);
@@ -287,7 +287,7 @@
       residual: robustResidual || result.residual,
       rawQuality: result.quality,
       rawResidual: result.residual,
-      qualityCrossValidated: !!robustResidual,
+      qualityRobustEstimated: !!robustResidual,
       transformType: result.type,
       fallback: result.fallback || false,
       validation: finalValidation
@@ -649,7 +649,7 @@
       residual: robustResidual || _calibrationData.residual,
       rawQuality: _calibrationData.quality,
       rawResidual: _calibrationData.residual,
-      qualityCrossValidated: !!robustResidual,
+      qualityRobustEstimated: !!robustResidual,
       validation: validation,
       sourceMarkerCount: sourceMarkerCount,
       sourceMarkerTypeCounts: sourceMarkerTypeCounts,
@@ -730,7 +730,7 @@
       });
     }
     if (!finalValidation.issues) finalValidation.issues = [];
-    finalValidation.issues.push("质量评分基于留一交叉验证（LOOCV）计算，避免四点拟合残差被低估");
+    finalValidation.issues.push("质量评分基于距离一致性估计和校准点几何惩罚，避免四点拟合残差被低估");
 
     var displayResidual = robustResidual || result.residual;
     var displayQuality = robustQuality || result.quality;
