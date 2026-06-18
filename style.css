@@ -6314,3 +6314,33 @@ body.calibration-app {
   font-size: 11px;
   line-height: 1.4;
 }
+
+.review-merge-option {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: rgba(61, 122, 61, 0.06);
+  border: 1px solid rgba(61, 122, 61, 0.2);
+  border-radius: 6px;
+}
+
+.merge-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.merge-checkbox-label input[type="checkbox"] {
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.merge-option-hint {
+  margin: 6px 0 0 24px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}

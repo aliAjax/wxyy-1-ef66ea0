@@ -129,6 +129,14 @@
         base.realHeight = Number(Number(m.realHeight).toFixed(2));
       }
     }
+    const VALID_REVIEW_STATUSES = ["pending", "passed", "doubtful", "rejected"];
+    if (m.review && m.review.status && VALID_REVIEW_STATUSES.indexOf(m.review.status) !== -1) {
+      base.review = {
+        status: m.review.status,
+        comment: (m.review.comment || "").trim(),
+        reviewedAt: m.review.reviewedAt || null,
+      };
+    }
     return base;
   }
 

@@ -88,6 +88,7 @@
   let currentMode = "point";
   let dragState = null;
   let pendingImportData = null;
+  let mergeReviewOnlyMode = false;
   let candidatesVisible = true;
   let lastPageId = null;
 
@@ -739,6 +740,9 @@
     var cannotApplyCount = reviewAnalysis.cannotApply.length;
     var summaryClass = cannotApplyCount > 0 ? "warning" : "success";
 
+    var hasExistingData = State.hasData();
+    var canMerge = hasExistingData && willApplyCount > 0;
+
     var html =
       '<div class="review-preview-title">🔍 复核结果数据</div>' +
 
@@ -776,6 +780,17 @@
         '</div>' +
       '</div>';
 
+    if (canMerge) {
+      html +=
+        '<div class="review-merge-option">' +
+          '<label class="merge-checkbox-label">' +
+            '<input type="checkbox" id="mergeReviewOnlyCheckbox" ' + (mergeReviewOnlyMode ? 'checked' : '') + '>' +
+            '<span>仅合并复核结果（保留当前项目数据，只更新标记的复核状态）</span>' +
+          '</label>' +
+          '<p class="merge-option-hint">勾选后，将按页面和标记ID匹配，仅把复核状态挂回到现有标记上，不修改标记位置、类型等其他数据。</p>' +
+        '</div>';
+    }
+
     if (cannotApplyCount > 0) {
       html +=
         '<div class="review-preview-unmatched">' +
@@ -812,6 +827,13 @@
 
     importReviewPreview.innerHTML = html;
     importReviewPreview.style.display = "block";
+
+    var checkbox = document.getElementById("mergeReviewOnlyCheckbox");
+    if (checkbox) {
+      checkbox.addEventListener("change", function (e) {
+        mergeReviewOnlyMode = e.target.checked;
+      });
+    }
   }
 
   function showImportMigrationDetail(result) {
@@ -894,6 +916,7 @@
   function closeImportModal() {
     importModal.style.display = "none";
     pendingImportData = null;
+    mergeReviewOnlyMode = false;
     importFileInput.value = "";
   }
 
@@ -990,9 +1013,66 @@
     reader.readAsText(file);
   }
 
+  function handleMergeReviewResults() {
+    if (!pendingImportData) {
+      showImportError("导入失败", "没有可导入的数据，请重新选择文件。");
+      return;
+    }
+
+    var reviewAnalysis = Package.analyzeReviewMatches(pendingImportData, State.all);
+
+    if (!reviewAnalysis.hasReviewData) {
+      showImportError("导入失败", "该文件中不包含复核结果数据。");
+      return;
+    }
+
+    if (reviewAnalysis.toApply.length === 0) {
+      showImportError("导入失败", "该文件中的复核结果均无法匹配到当前项目的标记，无法合并。",
+        "请确认文件中的页面和标记ID是否与当前项目一致。");
+      return;
+    }
+
+    try {
+      var mergeResult = State.mergeReviewResults(pendingImportData);
+
+      hideAllImportStates();
+      importSuccess.style.display = "flex";
+
+      var successText =
+        "已合并 " + mergeResult.merged + " 条复核结果";
+
+      if (mergeResult.skipped > 0) {
+        successText += "，" + mergeResult.skipped + " 条无法匹配";
+      }
+
+      if (importSuccessInfo) {
+        importSuccessInfo.textContent = successText;
+      }
+
+      confirmImportBtn.style.display = "none";
+      cancelImportBtn.textContent = "完成";
+
+      showToast(
+        "复核结果合并成功，" + mergeResult.merged + " 条标记已更新复核状态",
+        "success"
+      );
+
+      setTimeout(function () {
+        closeImportModal();
+      }, 2500);
+    } catch (e) {
+      showImportError("合并失败", e.message || "未知错误");
+    }
+  }
+
   function handleConfirmImport() {
     if (!pendingImportData) {
       showImportError("导入失败", "没有可导入的数据，请重新选择文件。");
+      return;
+    }
+
+    if (mergeReviewOnlyMode) {
+      handleMergeReviewResults();
       return;
     }
 

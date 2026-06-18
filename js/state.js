@@ -695,6 +695,85 @@
       return stats;
     },
 
+    mergeReviewResults(packageData) {
+      const result = {
+        merged: 0,
+        skipped: 0,
+        unmatched: [],
+        stats: { passed: 0, doubtful: 0, rejected: 0 },
+      };
+
+      if (!packageData || !packageData.pages) return result;
+
+      const VALID_STATUSES = ["pending", "passed", "doubtful", "rejected"];
+
+      const pageMap = new Map();
+      this._state.pages.forEach((p) => pageMap.set(p.id, p));
+
+      packageData.pages.forEach((pkgPage) => {
+        if (!pkgPage.markers) return;
+
+        const currentPage = pageMap.get(pkgPage.id);
+        if (!currentPage) {
+          pkgPage.markers.forEach((m) => {
+            if (m.review && m.review.status && m.review.status !== "pending") {
+              result.unmatched.push({
+                markerId: m.id,
+                pageId: pkgPage.id,
+                pageName: pkgPage.name || pkgPage.fileName || pkgPage.id,
+                reason: "页面不存在",
+              });
+              result.skipped++;
+            }
+          });
+          return;
+        }
+
+        const markerMap = new Map();
+        currentPage.markers.forEach((m) => markerMap.set(m.id, m));
+
+        pkgPage.markers.forEach((pkgMarker) => {
+          if (!pkgMarker.review || !pkgMarker.review.status || pkgMarker.review.status === "pending") {
+            return;
+          }
+
+          if (VALID_STATUSES.indexOf(pkgMarker.review.status) === -1) {
+            return;
+          }
+
+          const currentMarker = markerMap.get(pkgMarker.id);
+          if (!currentMarker) {
+            result.unmatched.push({
+              markerId: pkgMarker.id,
+              pageId: pkgPage.id,
+              pageName: pkgPage.name || pkgPage.fileName || pkgPage.id,
+              reason: "标记不存在",
+            });
+            result.skipped++;
+            return;
+          }
+
+          currentMarker.review = {
+            status: pkgMarker.review.status,
+            comment: (pkgMarker.review.comment || "").trim(),
+            reviewedAt: pkgMarker.review.reviewedAt || new Date().toISOString(),
+          };
+
+          result.merged++;
+          if (result.stats[pkgMarker.review.status] !== undefined) {
+            result.stats[pkgMarker.review.status]++;
+          }
+        });
+      });
+
+      if (result.merged > 0) {
+        this._touchCurrentPage();
+        this._notify();
+      }
+
+      return result;
+    },
+
     addMigratedMarker({ typeId, type, note, x, y, realX, realY, sourceMarkerId, migratedFrom, transformType, positionAdjusted }) {
       const page = this.currentPage;
       if (!page) return null;
