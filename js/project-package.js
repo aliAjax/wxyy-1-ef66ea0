@@ -309,6 +309,11 @@
       };
     }
 
+    var diffSummaryData = null;
+    if (state.diffSummary && state.diffSummary.hasDiff) {
+      diffSummaryData = JSON.parse(JSON.stringify(state.diffSummary));
+    }
+
     var result = {
       format: PACKAGE_FORMAT,
       formatVersion: PACKAGE_VERSION,
@@ -338,6 +343,20 @@
         taskCount: taskQueueData ? taskQueueData.taskCount : 0,
         hasQualityReport: !!qualityReportData,
         qualityReport: qualityReportSummary,
+        hasDiffSummary: !!diffSummaryData,
+        diffInfo: diffSummaryData ? {
+          fileA: diffSummaryData.fileA || "",
+          fileB: diffSummaryData.fileB || "",
+          totalMismatches: diffSummaryData.volumeStatistics
+            ? (diffSummaryData.volumeStatistics.onlyA || 0) +
+              (diffSummaryData.volumeStatistics.onlyB || 0) +
+              (diffSummaryData.volumeStatistics.typeMismatch || 0) +
+              (diffSummaryData.volumeStatistics.noteMismatch || 0)
+            : 0,
+          consistency: diffSummaryData.volumeStatistics
+            ? (diffSummaryData.volumeStatistics.consistency || 0)
+            : 0,
+        } : null,
       },
       pages: pages,
       calibrationSessions: calibrationSessions,
@@ -356,6 +375,10 @@
 
     if (qualityReportData) {
       result.qualityReport = qualityReportData;
+    }
+
+    if (diffSummaryData) {
+      result.diffSummary = diffSummaryData;
     }
 
     if (hasRealCoords) {
@@ -1068,6 +1091,36 @@
       qualityReport = JSON.parse(JSON.stringify(packageData.qualityReport));
     }
 
+    var diffSummary = null;
+    var mergedFrom = packageData._mergedFrom || null;
+    if (mergedFrom && typeof mergedFrom === "object") {
+      var pageStats = [];
+      if (Array.isArray(mergedFrom.pageStatistics)) {
+        pageStats = mergedFrom.pageStatistics.map(function (ps) {
+          return {
+            pageIndex: ps.pageIndex !== undefined ? ps.pageIndex : null,
+            pageName: ps.pageName || "",
+            pageId: null,
+            statistics: ps.statistics || null,
+          };
+        });
+      }
+      var pages = packageData.pages || [];
+      pageStats.forEach(function (ps) {
+        if (ps.pageIndex !== null && ps.pageIndex < pages.length && pages[ps.pageIndex]) {
+          ps.pageId = pages[ps.pageIndex].id || null;
+        }
+      });
+      diffSummary = {
+        hasDiff: true,
+        fileA: mergedFrom.fileA || "",
+        fileB: mergedFrom.fileB || "",
+        mergedAt: mergedFrom.mergedAt || null,
+        volumeStatistics: mergedFrom.volumeStatistics || null,
+        pageStatistics: pageStats,
+      };
+    }
+
     return {
       volumeId: proj.id || "",
       volumeTitle: proj.title || "",
@@ -1102,6 +1155,7 @@
       calibrationSessions: packageData.calibrationSessions || [],
       calibrationPlans: calibrationPlans,
       qualityReport: qualityReport,
+      diffSummary: diffSummary,
     };
   }
 

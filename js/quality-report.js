@@ -325,8 +325,91 @@
     return issues;
   }
 
-  function _detectDiffMismatches() {
+  function _detectDiffMismatches(state) {
     const issues = [];
+    if (!state || !state.diffSummary || !state.diffSummary.hasDiff) {
+      return issues;
+    }
+
+    const diffSummary = state.diffSummary;
+    const pageStats = diffSummary.pageStatistics || [];
+    const pages = state.pages || [];
+
+    pageStats.forEach(function (ps) {
+      if (!ps || !ps.statistics) return;
+
+      const stats = ps.statistics;
+      const onlyA = stats.onlyA || 0;
+      const onlyB = stats.onlyB || 0;
+      const typeMismatch = stats.typeMismatch || 0;
+      const noteMismatch = stats.noteMismatch || 0;
+      const total = stats.total || 0;
+
+      const totalMismatches = onlyA + onlyB + typeMismatch + noteMismatch;
+      if (totalMismatches === 0) return;
+
+      let pageId = ps.pageId;
+      let pageName = ps.pageName || "";
+
+      if (!pageId && ps.pageIndex !== null && ps.pageIndex < pages.length) {
+        const page = pages[ps.pageIndex];
+        if (page) {
+          pageId = page.id;
+          pageName = page.name || page.fileName || pageName;
+        }
+      }
+
+      if (!pageId) return;
+
+      let severity = ISSUE_SEVERITY.INFO;
+      if (typeMismatch > 0 || onlyA > 3 || onlyB > 3) {
+        severity = ISSUE_SEVERITY.WARNING;
+      }
+      if (typeMismatch > 3 || (onlyA + onlyB) > 10) {
+        severity = ISSUE_SEVERITY.CRITICAL;
+      }
+
+      const mismatchRatio = total > 0 ? Math.round((totalMismatches / total) * 100) : 0;
+
+      const details = [];
+      if (onlyA > 0) {
+        details.push({ type: "only_a", count: onlyA, label: "仅A标注员有" });
+      }
+      if (onlyB > 0) {
+        details.push({ type: "only_b", count: onlyB, label: "仅B标注员有" });
+      }
+      if (typeMismatch > 0) {
+        details.push({ type: "type_mismatch", count: typeMismatch, label: "类型不一致" });
+      }
+      if (noteMismatch > 0) {
+        details.push({ type: "note_mismatch", count: noteMismatch, label: "备注不一致" });
+      }
+
+      const issue = {
+        id: "diff-" + pageId,
+        type: REPORT_ISSUE_TYPES.DIFF_MISMATCH,
+        severity: severity,
+        pageId: pageId,
+        pageName: pageName,
+        description:
+          "双人标注存在 " + totalMismatches + " 处不一致（不一致率 " + mismatchRatio + "%）",
+        data: {
+          totalMismatches: totalMismatches,
+          mismatchRatio: mismatchRatio,
+          onlyA: onlyA,
+          onlyB: onlyB,
+          typeMismatch: typeMismatch,
+          noteMismatch: noteMismatch,
+          totalMarkers: total,
+          consistency: stats.consistency || 0,
+          details: details,
+          pageIndex: ps.pageIndex,
+        },
+      };
+
+      issues.push(issue);
+    });
+
     return issues;
   }
 
@@ -340,7 +423,7 @@
       _detectDensityAnomalies(pages),
       _detectPendingCandidates(pages),
       _detectReviewRejected(pages),
-      _detectDiffMismatches(),
+      _detectDiffMismatches(state),
       _detectLowQualityMigrations(pages, calibrationPlans)
     );
 

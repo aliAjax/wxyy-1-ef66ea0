@@ -34,6 +34,7 @@
     calibrationSessions: [],
     calibrationPlans: [],
     qualityReport: null,
+    diffSummary: null,
   };
 
   function readRaw() {
@@ -216,6 +217,28 @@
       state.qualityReport = raw.qualityReport;
     } else {
       state.qualityReport = null;
+    }
+
+    if (raw.diffSummary && typeof raw.diffSummary === "object" && raw.diffSummary.hasDiff) {
+      state.diffSummary = {
+        hasDiff: true,
+        fileA: raw.diffSummary.fileA || "",
+        fileB: raw.diffSummary.fileB || "",
+        mergedAt: raw.diffSummary.mergedAt || null,
+        volumeStatistics: raw.diffSummary.volumeStatistics || null,
+        pageStatistics: Array.isArray(raw.diffSummary.pageStatistics)
+          ? raw.diffSummary.pageStatistics.map(function (ps) {
+              return {
+                pageIndex: ps.pageIndex !== undefined ? ps.pageIndex : null,
+                pageName: ps.pageName || "",
+                pageId: ps.pageId || null,
+                statistics: ps.statistics || null,
+              };
+            })
+          : [],
+      };
+    } else {
+      state.diffSummary = null;
     }
 
     return state;

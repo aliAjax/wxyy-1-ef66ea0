@@ -1356,6 +1356,25 @@
       this._notify();
       return true;
     },
+
+    getDiffSummary() {
+      return this._state.diffSummary || null;
+    },
+
+    saveDiffSummary(diffData) {
+      if (!diffData || typeof diffData !== "object") return false;
+      this._state.diffSummary = JSON.parse(JSON.stringify(diffData));
+      this._persist();
+      this._notify();
+      return true;
+    },
+
+    clearDiffSummary() {
+      this._state.diffSummary = null;
+      this._persist();
+      this._notify();
+      return true;
+    },
   };
 
   global.VolumeState = VolumeState;

@@ -668,7 +668,7 @@
       ? new Date(summary.exportedAt).toLocaleString("zh-CN")
       : "未知";
 
-    const rows = [
+    var rows = [
       ["项目名称", summary.packageName],
       ["页面数", summary.pageCount + " 页"],
       ["标记总数", summary.totalMarkers + " 条"],
@@ -677,6 +677,52 @@
       ["导出时间", timeStr],
       ["格式版本", summary.formatVersion],
     ];
+
+    var extraInfoHtml = "";
+
+    if (summary.hasQualityReport && summary.qualityReport) {
+      var qr = summary.qualityReport;
+      rows.push(["质检报告", "✓ 包含（" + (qr.totalIssues || 0) + " 个问题）"]);
+      extraInfoHtml +=
+        '<div class="import-extra-info import-qr-info">' +
+          '<div class="import-extra-info-title">📊 质检报告摘要</div>' +
+          '<div class="import-extra-info-body">' +
+            '<div class="import-extra-row"><span>问题总数</span><strong class="accent">' +
+              (qr.totalIssues || 0) + '</strong></div>' +
+            '<div class="import-extra-row"><span>严重</span><strong style="color:#c53030;">' +
+              (qr.criticalCount || 0) + '</strong></div>' +
+            '<div class="import-extra-row"><span>警告</span><strong style="color:#b45309;">' +
+              (qr.warningCount || 0) + '</strong></div>' +
+            '<div class="import-extra-row"><span>提示</span><strong style="color:#0d9488;">' +
+              (qr.infoCount || 0) + '</strong></div>' +
+            '<div class="import-extra-row"><span>涉及页数</span><strong>' +
+              (qr.pagesWithIssues || 0) + ' 页</strong></div>' +
+            '<div class="import-extra-row"><span>复核进度</span><strong>' +
+              (qr.reviewProgress || 0) + '%</strong></div>' +
+            '<div class="import-extra-note">导入后将根据实际数据自动重新计算报告</div>' +
+          '</div>' +
+        '</div>';
+    }
+
+    if (summary.hasDiffSummary && summary.diffInfo) {
+      var di = summary.diffInfo;
+      rows.push(["双人比对", "✓ 包含（一致率 " + (di.consistency || 0) + "%）"]);
+      extraInfoHtml +=
+        '<div class="import-extra-info import-diff-info">' +
+          '<div class="import-extra-info-title">🔀 双人标注差异比对</div>' +
+          '<div class="import-extra-info-body">' +
+            '<div class="import-extra-row"><span>标注员A</span><strong>' +
+              escapeHtmlSimple(di.fileA || "A") + '</strong></div>' +
+            '<div class="import-extra-row"><span>标注员B</span><strong>' +
+              escapeHtmlSimple(di.fileB || "B") + '</strong></div>' +
+            '<div class="import-extra-row"><span>不一致项</span><strong class="accent">' +
+              (di.totalMismatches || 0) + ' 处</strong></div>' +
+            '<div class="import-extra-row"><span>标注一致率</span><strong>' +
+              (di.consistency || 0) + '%</strong></div>' +
+            '<div class="import-extra-note">差异数据将随报告一同重新计算</div>' +
+          '</div>' +
+        '</div>';
+    }
 
     var typeListHtml = "";
     if (packageData && packageData.damageTypes) {
@@ -707,6 +753,7 @@
         '</div>';
       }).join("") +
       typeListHtml +
+      extraInfoHtml +
       (summary.wasMigrated
         ? '<div class="import-summary-note">此文件由旧格式（' + escapeHtmlSimple(summary.migratedFrom || "未知") + ' v' + escapeHtmlSimple(summary.originalFormatVersion || "?") + '）自动迁移而来，数据结构已适配当前版本。</div>'
         : "") +
@@ -1174,6 +1221,26 @@
         if (latestSession && latestSession.data) {
           CalibrationUI.restoreExportData(latestSession.data);
         }
+      }
+
+      if (QualityReport) {
+        setTimeout(function () {
+          QualityReport.invalidateCache();
+          var recalculated = QualityReport.recalculateReport();
+          if (recalculated && State && typeof State.saveQualityReport === "function") {
+            State.saveQualityReport(recalculated);
+          }
+          var diffSummary = State && typeof State.getDiffSummary === "function"
+            ? State.getDiffSummary()
+            : null;
+          if (diffSummary && diffSummary.hasDiff) {
+            showToast("质检报告已重新生成，包含 " +
+              (recalculated && recalculated.summary ? recalculated.summary.totalIssues : 0) +
+              " 个问题项（含双人标注差异）", "info", 3500);
+          } else {
+            showToast("质检报告已根据导入数据重新生成", "info", 2500);
+          }
+        }, 300);
       }
 
       setTimeout(function () {
@@ -2553,6 +2620,16 @@
               extraInfo = '<div class="qr-issue-extra">' +
                 '当前：' + (issue.data.markerCount || 0) + ' 个，' +
                 '平均：' + (issue.data.averageCount || 0) + ' 个' +
+                '</div>';
+            } else if (issue.type === "diff_mismatch") {
+              var detailParts = [];
+              if (issue.data.onlyA) detailParts.push('仅A有 ' + issue.data.onlyA + ' 项');
+              if (issue.data.onlyB) detailParts.push('仅B有 ' + issue.data.onlyB + ' 项');
+              if (issue.data.typeMismatch) detailParts.push('类型不一致 ' + issue.data.typeMismatch + ' 项');
+              if (issue.data.noteMismatch) detailParts.push('备注不一致 ' + issue.data.noteMismatch + ' 项');
+              extraInfo = '<div class="qr-issue-extra">' +
+                detailParts.join('，') +
+                '，一致率 ' + (issue.data.consistency || 0) + '%' +
                 '</div>';
             }
           }
