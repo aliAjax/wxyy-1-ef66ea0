@@ -836,17 +836,9 @@
 
     if (!page || !page.image || !candidateLayer) return;
 
-    const candidates = window.CandidateManager
-      ? window.CandidateManager.getCandidates()
+    const filteredCandidates = window.CandidateManager
+      ? window.CandidateManager.getFilteredCandidates()
       : [];
-    const filter = window.CandidateManager
-      ? window.CandidateManager.getFilter()
-      : "all";
-
-    const filteredCandidates =
-      filter === "all"
-        ? candidates
-        : candidates.filter((c) => c.status === filter);
 
     if (filteredCandidates.length === 0) {
       candidateLayer.innerHTML = "";
@@ -912,19 +904,17 @@
   function renderCandidateList() {
     if (!Doms.candidateList) return;
 
-    const candidates = window.CandidateManager
+    const allCandidates = window.CandidateManager
       ? window.CandidateManager.getCandidates()
       : [];
     const filter = window.CandidateManager
       ? window.CandidateManager.getFilter()
       : "all";
+    const filteredCandidates = window.CandidateManager
+      ? window.CandidateManager.getFilteredCandidates()
+      : [];
 
-    const filteredCandidates =
-      filter === "all"
-        ? candidates
-        : candidates.filter((c) => c.status === filter);
-
-    if (candidates.length === 0) {
+    if (allCandidates.length === 0) {
       Doms.candidateList.innerHTML =
         '<div class="candidate-empty">点击「开始检测」识别疑似虫蛀区域</div>';
       return;

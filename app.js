@@ -1416,50 +1416,36 @@
       showToast("请先上传扫描页图片", "warning");
       return;
     }
-
-    if (!CandidateDetector || !CandidateManager) {
+    if (!CandidateManager) {
       showToast("候选检测模块未加载", "error");
       return;
     }
 
-    const sensitivity = candidateSensitivity
-      ? parseInt(candidateSensitivity.value, 10)
-      : 50;
-    const detectEdge = detectEdgeDamage ? detectEdgeDamage.checked : true;
-    const maxCandidates = maxCandidatesSelect
-      ? parseInt(maxCandidatesSelect.value, 10)
-      : 50;
-
-    const options = {
-      sensitivity: sensitivity,
-      detectEdgeDamage: detectEdge,
-      maxCandidates: maxCandidates,
-    };
+    CandidateManager.setSensitivity(
+      candidateSensitivity ? parseInt(candidateSensitivity.value, 10) : 50
+    );
+    CandidateManager.setDetectEdge(
+      detectEdgeDamage ? detectEdgeDamage.checked : true
+    );
+    CandidateManager.setMaxCandidates(
+      maxCandidatesSelect ? parseInt(maxCandidatesSelect.value, 10) : 50
+    );
 
     runDetectBtn.disabled = true;
     runDetectBtn.textContent = "检测中...";
 
     try {
-      const result = await CandidateDetector.detectCandidates(
-        page.image,
-        options
-      );
-
-      if (result.warning) {
-        showToast(result.warning, "warning");
-      }
-
-      CandidateManager.setCandidates(result.candidates || []);
-
-      const count = (result.candidates || []).length;
-      if (count > 0) {
-        syncCandidateSummaryToState();
-        showToast(`检测完成，发现 ${count} 个疑似区域`, "success");
+      const result = await CandidateManager.runDetection(page.image);
+      if (result.success) {
+        if (result.warning) showToast(result.warning, "warning");
+        if (result.count > 0) {
+          showToast(`检测完成，发现 ${result.count} 个疑似区域`, "success");
+        } else {
+          showToast("检测完成，未发现疑似虫蛀区域", "info");
+        }
       } else {
-        showToast("检测完成，未发现疑似虫蛀区域", "info");
+        showToast("检测失败：" + (result.error || "未知错误"), "error");
       }
-
-      Render.refresh();
     } catch (e) {
       console.error("候选检测失败", e);
       showToast("检测失败：" + (e.message || "未知错误"), "error");
@@ -1471,14 +1457,9 @@
 
   function acceptAllPendingCandidates() {
     if (!CandidateManager) return;
-    if (window.HistoryManager) {
-      window.HistoryManager.recordAction("accept-candidates");
-    }
     const count = CandidateManager.acceptAllPending();
     if (count > 0) {
-      syncCandidateSummaryToState();
       showToast(`已接受 ${count} 个候选`, "success");
-      Render.refresh();
     } else {
       showToast("没有待处理的候选", "info");
     }
@@ -1488,9 +1469,7 @@
     if (!CandidateManager) return;
     const count = CandidateManager.ignoreAllPending();
     if (count > 0) {
-      syncCandidateSummaryToState();
       showToast(`已忽略 ${count} 个候选`, "info");
-      Render.refresh();
     } else {
       showToast("没有待处理的候选", "info");
     }
@@ -1498,20 +1477,12 @@
 
   function acceptByConfidenceCandidates() {
     if (!CandidateManager) return;
-
     const thresholdPercent = confidenceThreshold
       ? parseInt(confidenceThreshold.value, 10)
       : 70;
-    const minConfidence = thresholdPercent / 100;
-
-    if (window.HistoryManager) {
-      window.HistoryManager.recordAction("accept-candidates");
-    }
-    const count = CandidateManager.acceptByConfidence(minConfidence);
+    const count = CandidateManager.acceptByConfidence(thresholdPercent / 100);
     if (count > 0) {
-      syncCandidateSummaryToState();
       showToast(`已接受 ${count} 个置信度 ≥ ${thresholdPercent}% 的候选`, "success");
-      Render.refresh();
     } else {
       showToast(`没有置信度 ≥ ${thresholdPercent}% 的待处理候选`, "info");
     }
@@ -1519,52 +1490,26 @@
 
   function applyAcceptedCandidates() {
     if (!CandidateManager) return;
-
-    const page = State.currentPage;
-    if (!page) {
+    if (!State.currentPage) {
       showToast("没有当前页面", "warning");
       return;
     }
-
-    const acceptedMarkers = CandidateManager.getAcceptedMarkers();
-    if (acceptedMarkers.length === 0) {
-      showToast("没有已接受的候选可应用", "warning");
-      return;
-    }
-
-    const selectedTypeId = Render.getSelectedTypeId();
-
-    if (window.HistoryManager) {
-      window.HistoryManager.recordAction("accept-candidates");
-    }
-    let addedCount = 0;
-    for (const markerData of acceptedMarkers) {
-      const finalMarker = {
-        ...markerData,
-        typeId: selectedTypeId || markerData.typeId,
-      };
-      const result =
-        finalMarker.mode === "region"
-          ? State.addRegion(finalMarker)
-          : State.addMarker(finalMarker);
-      if (result) addedCount++;
-    }
-
-    if (addedCount > 0) {
-      syncCandidateSummaryToState();
-      CandidateManager.clearAccepted();
-      Render.refresh();
+    const result = CandidateManager.applyAcceptedToMarkers(
+      Render.getSelectedTypeId()
+    );
+    if (result.added > 0) {
+      showToast(`已添加 ${result.added} 个损伤记录`, "success");
     } else {
-      showToast("未能添加任何损伤记录", "warning");
+      if (result.count === 0) {
+        showToast("没有已接受的候选可应用", "warning");
+      } else {
+        showToast("未能添加任何损伤记录", "warning");
+      }
     }
   }
 
   function handleCandidateAction(candidateId, action) {
     if (!CandidateManager) return;
-
-    if (action === "accept" && window.HistoryManager) {
-      window.HistoryManager.recordAction("accept-candidates");
-    }
     switch (action) {
       case "accept":
         CandidateManager.acceptCandidate(candidateId);
@@ -1576,23 +1521,17 @@
         CandidateManager.resetCandidate(candidateId);
         break;
     }
-
-    syncCandidateSummaryToState();
-    Render.refresh();
   }
 
   function setCandidateFilter(filter) {
     if (!CandidateManager) return;
     CandidateManager.setFilter(filter);
-
     if (candidateFilterTabs) {
       const tabs = candidateFilterTabs.querySelectorAll(".cand-filter-tab");
       tabs.forEach((tab) => {
         tab.classList.toggle("active", tab.dataset.filter === filter);
       });
     }
-
-    Render.refresh();
   }
 
   function handleCandidateListClick(e) {
@@ -1607,18 +1546,15 @@
       }
       return;
     }
-
     const item = e.target.closest("[data-candidate-id]");
     if (item) {
-      const candidateId = item.dataset.candidateId;
-      highlightCandidate(candidateId);
+      highlightCandidate(item.dataset.candidateId);
     }
   }
 
   function highlightCandidate(candidateId) {
     const { candidateLayer } = Render.getActiveStageElements();
-    if (!candidateLayer) return;
-
+    if (!candidateLayer || !candidateId) return;
     const marker = candidateLayer.querySelector(
       `[data-candidate-id="${candidateId}"]`
     );
@@ -1657,7 +1593,6 @@
       }
       lastPageId = currentPageId;
       CandidateManager.clearCandidates();
-      Render.refresh();
     }
   }
 
@@ -3940,12 +3875,6 @@
     if (CandidateManager) {
       CandidateManager.init();
       CandidateManager.subscribe(function () {
-        if (State.currentPage) {
-          var stats = CandidateManager.getStats();
-          if (stats.total > 0) {
-            State.updateCandidateSummary(State.currentPage.id, stats);
-          }
-        }
         Render.refresh();
       });
     }
