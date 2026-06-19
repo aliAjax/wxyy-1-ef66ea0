@@ -1,0 +1,20 @@
+{
+  "name": "wxyy-archive-damage-annotator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "古籍纸张损伤标注工具 — 纯前端本地应用",
+  "scripts": {
+    "serve": "node _tmp_server.js",
+    "test": "node test/diff-compare.test.js && node test/html-script-order.test.js && node test/json-regression.test.js && node test/project-package-compat.test.js && node test/calibration.test.js",
+    "test:diff": "node test/diff-compare.test.js",
+    "test:html": "node test/html-script-order.test.js",
+    "test:json": "node test/json-regression.test.js",
+    "test:compat": "node test/project-package-compat.test.js",
+    "test:calib": "node test/calibration.test.js",
+    "test:ci": "node test/diff-compare.test.js && node test/html-script-order.test.js && node test/json-regression.test.js && node test/project-package-compat.test.js && node test/calibration.test.js",
+    "lint:scripts": "node test/html-script-order.test.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

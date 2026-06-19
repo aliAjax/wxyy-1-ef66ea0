@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Run diff-compare tests
+        run: node test/diff-compare.test.js
+
+      - name: Run HTML script order tests
+        run: node test/html-script-order.test.js
+
+      - name: Run JSON regression tests
+        run: node test/json-regression.test.js
+
+      - name: Run project-package compatibility tests
+        run: node test/project-package-compat.test.js
+
+      - name: Run calibration math tests
+        run: node test/calibration.test.js
+
+      - name: Run all tests combined
+        run: node test/diff-compare.test.js && node test/html-script-order.test.js && node test/json-regression.test.js && node test/project-package-compat.test.js && node test/calibration.test.js
