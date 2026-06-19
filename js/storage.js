@@ -509,6 +509,41 @@
       throw new Error("工作包中没有有效的页面数据");
     }
 
+    var qualityReport = null;
+    if (packageData.qualityReport && typeof packageData.qualityReport === "object" && packageData.qualityReport.issues) {
+      qualityReport = JSON.parse(JSON.stringify(packageData.qualityReport));
+    }
+
+    var diffSummary = null;
+    if (packageData.diffSummary && typeof packageData.diffSummary === "object" && packageData.diffSummary.hasDiff) {
+      diffSummary = JSON.parse(JSON.stringify(packageData.diffSummary));
+    } else if (packageData._mergedFrom && typeof packageData._mergedFrom === "object") {
+      var mergedFrom = packageData._mergedFrom;
+      var pageStats = Array.isArray(mergedFrom.pageStatistics)
+        ? mergedFrom.pageStatistics.map(function (ps) {
+            var pageIndex = ps.pageIndex !== undefined ? ps.pageIndex : null;
+            var pageId = ps.pageId || null;
+            if (!pageId && pageIndex !== null && normalizedPages[pageIndex]) {
+              pageId = normalizedPages[pageIndex].id || null;
+            }
+            return {
+              pageIndex: pageIndex,
+              pageName: ps.pageName || "",
+              pageId: pageId,
+              statistics: ps.statistics || null,
+            };
+          })
+        : [];
+      diffSummary = {
+        hasDiff: true,
+        fileA: mergedFrom.fileA || "",
+        fileB: mergedFrom.fileB || "",
+        mergedAt: mergedFrom.mergedAt || null,
+        volumeStatistics: mergedFrom.volumeStatistics || null,
+        pageStatistics: pageStats,
+      };
+    }
+
     var state = normalizeState({
       volumeId: projectId,
       volumeTitle: projectTitle,
@@ -517,6 +552,8 @@
       createdAt: projectCreatedAt,
       updatedAt: now,
       damageTypes: packageData.damageTypes,
+      qualityReport: qualityReport,
+      diffSummary: diffSummary,
     });
 
     return state;

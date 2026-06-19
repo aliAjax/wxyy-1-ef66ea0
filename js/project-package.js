@@ -287,10 +287,10 @@
 
     var qualityReportData = null;
     try {
-      if (state.qualityReport && typeof state.qualityReport === "object" && state.qualityReport.issues) {
-        qualityReportData = JSON.parse(JSON.stringify(state.qualityReport));
-      } else if (global.QualityReport && typeof global.QualityReport.exportReportData === "function") {
+      if (global.QualityReport && typeof global.QualityReport.exportReportData === "function") {
         qualityReportData = global.QualityReport.exportReportData();
+      } else if (state.qualityReport && typeof state.qualityReport === "object" && state.qualityReport.issues) {
+        qualityReportData = JSON.parse(JSON.stringify(state.qualityReport));
       }
     } catch (e) {
       console.warn("导出质检报告失败", e);
